@@ -1,0 +1,19 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (credenciales de BD, JWT). No subir.
+.env
+**/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archivos Excel de datos del cliente (no subir)
+EXELS/

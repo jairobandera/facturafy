@@ -1,0 +1,177 @@
+// Inicializa la base de datos: crea el esquema y carga datos de ejemplo.
+// Uso: npm run db:init
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import mysql from 'mysql2/promise';
+import { config } from '../src/config/env.js';
+import { hashPassword } from '../src/core/password.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const sqlDir = path.resolve(__dirname, '..', 'sql');
+
+async function main() {
+  // Conexion sin base seleccionada para poder crearla.
+  const root = await mysql.createConnection({
+    host: config.db.host,
+    port: config.db.port,
+    user: config.db.user,
+    password: config.db.password,
+    multipleStatements: true,
+  });
+
+  console.log(`> Creando base de datos "${config.db.database}" si no existe...`);
+  await root.query(
+    `CREATE DATABASE IF NOT EXISTS \`${config.db.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+  );
+  await root.query(`USE \`${config.db.database}\``);
+
+  console.log('> Ejecutando schema.sql...');
+  const schema = fs.readFileSync(path.join(sqlDir, 'schema.sql'), 'utf8');
+  await root.query(schema);
+
+  console.log('> Cargando datos de ejemplo...');
+  await seed(root);
+
+  await root.end();
+  console.log('\n✅ Base de datos lista.');
+  console.log('   Usuarios de prueba (contrasenia = "12345"):');
+  console.log('     - superadmin   (SUPERADMINISTRADOR)');
+  console.log('     - admin        (ADMINISTRADOR, Sucursal Centro)');
+  console.log('     - empleado     (EMPLEADO, Sucursal Centro)');
+  console.log('     - empleado2    (EMPLEADO, cuenta en cualquier sucursal)');
+}
+
+async function seed(conn) {
+  // Empresa
+  const [empRes] = await conn.query(
+    `INSERT INTO empresa (nombre, rut, direccion, telefono) VALUES (?,?,?,?)`,
+    ['Distribuidora Demo S.A.', '210000000012', 'Av. Siempre Viva 742', '099111222']
+  );
+  const empresaId = empRes.insertId;
+
+  // Sucursales
+  const [suc1] = await conn.query(
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id) VALUES (?,?,?,?)`,
+    ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId]
+  );
+  const sucursalId = suc1.insertId;
+  // Pocitos queda sin el apartado de Lotes para mostrar la opcion del superadmin.
+  const [suc2] = await conn.query(
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_lotes) VALUES (?,?,?,?,0)`,
+    ['Sucursal Pocitos', 'Av. Brasil 2500', '099555666', empresaId]
+  );
+  const sucursal2Id = suc2.insertId;
+
+  // Usuarios
+  const pass = await hashPassword('12345');
+  await conn.query(
+    // "empleado2" tiene cuenta_en_cualquier_sucursal = 1: cuenta en las dos sucursales.
+    `INSERT INTO usuario (nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
+      (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?)`,
+    [
+      'Sofia', 'Perez', 'superadmin', pass, 'SUPERADMINISTRADOR', sucursalId, 0,
+      'Martin', 'Gomez', 'admin', pass, 'ADMINISTRADOR', sucursalId, 0,
+      'Lucia', 'Fernandez', 'empleado', pass, 'EMPLEADO', sucursalId, 0,
+      'Diego', 'Rodriguez', 'empleado2', pass, 'EMPLEADO', sucursalId, 1,
+    ]
+  );
+
+  // Categorias
+  const [catBebidas] = await conn.query(
+    `INSERT INTO categoria (nombre, descripcion, codigo_categoria, sucursal_id) VALUES (?,?,?,?)`,
+    ['Bebidas', 'Bebidas y refrescos', 'BEB', sucursalId]
+  );
+  const [catAlmacen] = await conn.query(
+    `INSERT INTO categoria (nombre, descripcion, codigo_categoria, sucursal_id) VALUES (?,?,?,?)`,
+    ['Almacen', 'Productos de almacen', 'ALM', sucursalId]
+  );
+
+  // Proveedor
+  const [prov] = await conn.query(
+    `INSERT INTO proveedor (rut, nombre, direccion, telefono, nombre_vendedor) VALUES (?,?,?,?,?)`,
+    ['215000000018', 'Proveedor Central', 'Ruta 8 km 20', '098000111', 'Juan Vendedor']
+  );
+
+  // Productos de ejemplo
+  const productos = [
+    ['P001', 'Agua mineral 500ml', 'Botella 500ml', 32.5, 120, catBebidas.insertId, '7791234500011'],
+    ['P002', 'Refresco cola 1.5L', 'Botella 1.5L', 89.0, 60, catBebidas.insertId, '7791234500028'],
+    ['P003', 'Arroz 1kg', 'Paquete 1kg', 54.0, 80, catAlmacen.insertId, '7791234500035'],
+    ['P004', 'Fideos 500g', 'Paquete 500g', 41.0, 95, catAlmacen.insertId, '7791234500042'],
+  ];
+  const idPorCodigo = {};
+  for (const [cod, nombre, detalle, precio, stock, categoriaId, barra] of productos) {
+    const [pr] = await conn.query(
+      `INSERT INTO producto (codigo_producto, nombre, detalle, precio, cantidad_stock, sucursal_id, categoria_id)
+       VALUES (?,?,?,?,?,?,?)`,
+      [cod, nombre, detalle, precio, stock, sucursalId, categoriaId]
+    );
+    idPorCodigo[cod] = pr.insertId;
+    await conn.query(
+      `INSERT INTO codigo_barra (codigo, producto_id, sucursal_id) VALUES (?,?,?)`,
+      [barra, pr.insertId, sucursalId]
+    );
+    // Al P001 le "cambiaron" el EAN dos veces: los tres conviven y los tres escanean.
+    if (cod === 'P001') {
+      for (const extra of ['7791234599998', '7791234599999']) {
+        await conn.query(
+          `INSERT INTO codigo_barra (codigo, producto_id, sucursal_id) VALUES (?,?,?)`,
+          [extra, pr.insertId, sucursalId]
+        );
+      }
+    }
+    await conn.query(`INSERT INTO producto_proveedor (producto_id, proveedor_id) VALUES (?,?)`, [pr.insertId, prov.insertId]);
+  }
+
+  // Los mismos dos productos, tambien en Sucursal Pocitos: mismo codigo_producto y
+  // mismo codigo de barra, stock propio. Es el caso "deposito + local" y la prueba
+  // de que la unicidad es por sucursal, no global.
+  const [catBebidas2] = await conn.query(
+    `INSERT INTO categoria (nombre, descripcion, codigo_categoria, sucursal_id) VALUES (?,?,?,?)`,
+    ['Bebidas', 'Bebidas y refrescos', 'BEB', sucursal2Id]
+  );
+  const compartidos = [
+    ['P001', 'Agua mineral 500ml', 'Botella 500ml', 32.5, 40, '7791234500011'],
+    ['P002', 'Refresco cola 1.5L', 'Botella 1.5L', 89.0, 18, '7791234500028'],
+  ];
+  for (const [cod, nombre, detalle, precio, stock, barra] of compartidos) {
+    const [pr] = await conn.query(
+      `INSERT INTO producto (codigo_producto, nombre, detalle, precio, cantidad_stock, sucursal_id, categoria_id)
+       VALUES (?,?,?,?,?,?,?)`,
+      [cod, nombre, detalle, precio, stock, sucursal2Id, catBebidas2.insertId]
+    );
+    await conn.query(
+      `INSERT INTO codigo_barra (codigo, producto_id, sucursal_id) VALUES (?,?,?)`,
+      [barra, pr.insertId, sucursal2Id]
+    );
+  }
+
+  // Lotes de ejemplo. Las fechas son relativas a hoy para que siempre haya un caso
+  // de cada color del semaforo, y P003 queda con un descuadre a proposito
+  // (sus lotes suman 100 contra un stock de 80).
+  // afecta_stock = 0: el lote solo etiqueta stock que ya estaba contado.
+  const lotes = [
+    // [numero, codigoProducto, cantidad, diasHastaVencimiento (null = sin vencimiento), afectaStock]
+    ['L-1001', 'P001', 60, -5, 0],
+    ['L-1002', 'P001', 40, 5, 0],
+    ['L-2001', 'P002', 20, 20, 0],
+    ['L-2002', 'P002', 25, null, 0],
+    ['L-3001', 'P003', 100, 180, 0],
+    ['L-4001', 'P004', 15, 60, 1],
+  ];
+  for (const [numero, codProd, cantidad, dias, afecta] of lotes) {
+    await conn.query(
+      `INSERT INTO lote (numero_lote, fecha_ingreso, fecha_vencimiento, cantidad_stock, activo, afecta_stock, producto_id)
+       VALUES (?, DATE_SUB(CURDATE(), INTERVAL 30 DAY), ${dias === null ? 'NULL' : 'DATE_ADD(CURDATE(), INTERVAL ? DAY)'}, ?, 1, ?, ?)`,
+      dias === null
+        ? [numero, cantidad, afecta, idPorCodigo[codProd]]
+        : [numero, dias, cantidad, afecta, idPorCodigo[codProd]]
+    );
+  }
+}
+
+main().catch((err) => {
+  console.error('❌ Error inicializando la base de datos:', err.message);
+  process.exit(1);
+});
