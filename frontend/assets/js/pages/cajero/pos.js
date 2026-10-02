@@ -11,6 +11,7 @@ import { scanBarcode, manualSearch, findByCode } from '../../components/barcode.
 import { formModal } from '../../components/formModal.js';
 import { sucursalActiva } from '../../core/sucursal.js';
 import { resolveUsuarioId } from '../shared/session.js';
+import { onCleanup } from '../../core/lifecycle.js';
 
 const Swal = window.Swal;
 
@@ -103,13 +104,53 @@ export async function posPage() {
     facturarBtn,
   ]);
 
-  content.append(addCard, cartTable, h('div', { class: 'row g-3' }, [
-    h('div', { class: 'col-12 col-lg-7' }, clienteBox),
-    h('div', { class: 'col-12 col-lg-5' }, totalesCard),
-  ]));
+  // Cliente arriba a la izquierda y totales arriba a la derecha; abajo, escaneo y carrito.
+  content.append(
+    h('div', { class: 'row g-3 mb-3' }, [
+      h('div', { class: 'col-12 col-lg-6' }, clienteBox),
+      h('div', { class: 'col-12 col-lg-6' }, totalesCard),
+    ]),
+    addCard,
+    cartTable,
+  );
 
   renderCarrito();
   renderCliente();
+
+  // Lector de codigo de barra FISICO: funciona como un teclado que "tipea" el codigo
+  // muy rapido y termina con Enter. Lo capturamos a nivel documento para que, estando
+  // en el POS, pasar un producto por el lector lo busque y abra el modal de cantidad
+  // sin tener que apretar antes "Escanear producto".
+  let bufferScan = '';
+  let ultimaTecla = 0;
+  async function onKeydownScanner(e) {
+    // Si el foco esta en un campo o hay un popup abierto (cantidad, RUT, busqueda,
+    // nuevo cliente, confirmacion), no interceptamos: ese input maneja el escaneo.
+    const ae = document.activeElement;
+    const enCampo = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable);
+    if (enCampo) return;
+    if (window.Swal && Swal.isVisible()) return;
+    if (document.querySelector('.modal.show')) return;
+
+    const ahora = Date.now();
+    if (ahora - ultimaTecla > 120) bufferScan = ''; // tipeo lento => no es el lector
+    ultimaTecla = ahora;
+
+    if (e.key === 'Enter') {
+      const code = bufferScan.trim();
+      bufferScan = '';
+      if (code.length >= 3) {
+        e.preventDefault();
+        const producto = findByCode([...productosById.values()], code);
+        if (!producto) { ui.error(`No se encontró ningún producto con el código "${code}".`); return; }
+        await agregarAlCarrito(producto);
+      }
+      return;
+    }
+    if (e.key.length === 1) bufferScan += e.key;
+  }
+  document.addEventListener('keydown', onKeydownScanner);
+  onCleanup(() => document.removeEventListener('keydown', onKeydownScanner));
 
   // -------------------- Carrito --------------------
   async function agregarAlCarrito(producto) {
