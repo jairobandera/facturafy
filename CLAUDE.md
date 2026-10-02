@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Stockify 2.0 is a multi-company inventory / stock-counting system. It is a rewrite of the original
-Spring Boot + Angular "Stockify" (still intact in the sibling folder `../Stockify`) onto a
-**zero-framework** stack. The rewrite deliberately preserves the original's API shape, endpoint
-paths, and DTO field names for functional compatibility — when adding or changing endpoints, match
-the Java backend's conventions.
+**Facturafy** is a multi-company **facturación + control de stock** system. It started as a fork of
+Stockify 2.0 (inventory / stock-counting; the original lives in the sibling folder `../Stockify2.0`)
+and adds a billing module on top, on the same **zero-framework** stack. The API shape, endpoint paths
+and DTO field names from Stockify are preserved for compatibility; the API base is still
+`/Stockify/api/v1`.
 
 - **Backend**: raw Node.js (native `http` module, no Express) + `ws` for WebSocket + `mysql2` for
   MySQL/MariaDB + `bcryptjs`. ES modules (`"type": "module"`). These three are the *only* runtime deps.
@@ -43,7 +43,8 @@ mysql -u <usuario> -p <base> < backend/sql/migrations/001-lote-afecta-stock.sql
 ```
 
 Test users (password `12345`): `superadmin` (SUPERADMINISTRADOR), `admin` (ADMINISTRADOR),
-`empleado` (EMPLEADO).
+`empleado` (EMPLEADO), `cajero` (CAJERO, Sucursal Centro con paquete de facturación). The DB name is
+`facturafy` (see `.env`), independent from the original Stockify DB.
 
 ## Backend architecture
 
@@ -210,7 +211,7 @@ topics, kept identical to the original: `conteo-activo`, `conteo-finalizado`,
 No build — `index.html` loads `assets/js/app.js` as an ES module, which imports everything else.
 
 - `app.js` — registers every route with `router.add(path, handler, { role })` and starts the router.
-  Roles: `SUPERADMINISTRADOR`, `ADMINISTRADOR`, `EMPLEADO`.
+  Roles: `SUPERADMINISTRADOR`, `ADMINISTRADOR`, `EMPLEADO`, `CAJERO`.
 - `core/router.js` — **hash-based** router (`#/path/:param`) with per-route role guards. Unauthorized
   or wrong-role access redirects to login or the role's home dashboard (`auth.homeRoute()`).
 - `core/auth.js` — token stored in `localStorage` (`stockify_token`); decodes JWT client-side to read
@@ -246,3 +247,39 @@ Beyond the CRUD routes, `/lotes` adds `GET /sucursal/:id/por-vencer?dias=30` (ex
 `POST /ajustar-stock` (`{ productoId }`, iguala el stock del producto a la suma de sus lotes).
 `/productos` adds `GET /codigo/:codigoProducto/sucursal/:sucursalId` — the sucursal-scoped lookup
 that should be preferred over the ambiguous `GET /codigo/:codigoProducto`.
+
+Facturación resources: `/clientes` (CRUD + `GET /sucursal/:id` + `GET /sucursal/:id/rut/:rut`),
+`/ventas` (`POST /`, `GET /sucursal/:id?desde=&hasta=&estado=`, `GET /:id`, `POST /:id/anular`) and
+`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`).
+
+## Facturación (módulo nuevo de Facturafy)
+
+**Paquetes por sucursal.** Two flags on `sucursal` decide what each branch has, set by the superadmin
+in **Configuraciones** (`#/superadmin/configuraciones`, saved via `PUT /sucursales/:id`):
+`usa_stock` (conteos + estadísticas de conteo) and `usa_facturacion` (POS + ventas + clientes +
+estadísticas de venta). Inventory (productos/categorías/proveedores) is shared. The three "packages"
+(Completo / Solo facturación / Solo stock) are just presets over these two flags. Defaults preserve
+pre-facturación behavior: `usa_stock = 1`, `usa_facturacion = 0`.
+
+Enforced on both sides like `usa_lotes`: backend `assertUsaFacturacion` / `assertUsaStock`
+(`src/modules/sucursal/paquetes.js`, used by venta/cliente services and conteo creation); frontend
+`usaStock()` / `usaFacturacion()` (`core/sucursal.js`) feed the NAV (`layout.js` entries with
+`oculto: true` disappear when the package is off) and the route guards (`requiere`).
+
+**Rol CAJERO.** Fourth role (`usuario.service.js` ROLES). Logs in to `#/facturacion/dashboard`
+(`auth.homeRoute`). The cajero sells (POS), creates clientes and anula ventas. The **administrador**
+does not sell: sees ventas realizadas, anula, sees estadísticas de facturación, and also creates
+clientes. Reportes/estadísticas de conteo and de facturación are **separate** sections, never mixed.
+
+**POS** (`pages/cajero/pos.js`): reuses `components/barcode.js` (`scanBarcode`, `manualSearch`,
+`findByCode`) to add products; cart is a `Map(productoId → {producto, cantidad})` so equal products
+unify into one row; default cliente is **consumidor final** (`cliente_id = NULL`), optionally a
+cliente by RUT (`/clientes/sucursal/:id/rut/:rut`, with quick-create). `POST /ventas` recalculates
+totals **server-side**, inserts `venta` + `venta_detalle` (snapshot of código/nombre/precio) and
+**discounts** `producto.cantidad_stock`. `POST /ventas/:id/anular` requires a `motivo` and **returns**
+the stock. Comprobante PDF via jsPDF.
+
+**Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
+every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op
+until `CFE_ENABLED=true` and a provider are configured in `.env` (`CFE_*`). Activating it should be a
+minimal change: set credentials + implement the provider branch in `cfe.js`.
