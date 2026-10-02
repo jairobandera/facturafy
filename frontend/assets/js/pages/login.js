@@ -50,13 +50,13 @@ export function loginPage() {
   app.append(h('div', { class: 'sk-login-wrap' }, [
     h('div', { class: 'sk-login-card' }, [
       h('div', { class: 'sk-login-logo' }, [
-        h('i', { class: 'bi bi-box-seam-fill' }),
-        h('h1', {}, 'Stockify'),
-        h('p', { class: 'text-muted mb-0' }, 'Gestión de inventario'),
+        h('i', { class: 'bi bi-receipt-cutoff' }),
+        h('h1', {}, 'Facturafy'),
+        h('p', { class: 'text-muted mb-0' }, 'Facturación y control de stock'),
       ]),
       form,
       h('p', { class: 'text-center text-muted small mt-4 mb-0' },
-        'Usuarios demo: superadmin / admin / empleado (clave 12345)'),
+        'Usuarios demo: superadmin / admin / empleado / cajero (clave 12345)'),
     ]),
   ]));
 }

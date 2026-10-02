@@ -5,24 +5,26 @@ import { renderShell } from '../../core/layout.js';
 import { pageHeader, spinner } from '../../components/page.js';
 import { router } from '../../core/router.js';
 import { statCard, quickCard } from '../../components/cards.js';
-import { usaLotes } from '../../core/sucursal.js';
+import { usaLotes, usaStock, usaFacturacion } from '../../core/sucursal.js';
 
 export async function adminDashboard() {
   const content = renderShell('Dashboard');
-  content.append(pageHeader('Panel de Administrador', 'Inventario y conteos de tu sucursal.'));
+  content.append(pageHeader('Panel de Administrador', 'Inventario, stock y facturación de tu sucursal.'));
   const loading = spinner();
   content.append(loading);
 
   const sucursalId = auth.getSucursalId();
-  // El apartado de Lotes lo habilita el superadmin por sucursal.
+  // Los paquetes (stock / facturacion) y el apartado de Lotes los habilita el superadmin por sucursal.
   const lotesHabilitados = usaLotes();
+  const stockOn = usaStock();
+  const facturacionOn = usaFacturacion();
   try {
     const [productos, categorias, proveedores, conteos, porVencer] = await Promise.all([
       sucursalId ? api.get(`/productos/sucursal/${sucursalId}/activos`) : api.get('/productos'),
       sucursalId ? api.get(`/categorias/sucursal/${sucursalId}`) : api.get('/categorias'),
       sucursalId ? api.get(`/proveedores/sucursal/${sucursalId}/activos`) : api.get('/proveedores'),
-      api.get('/conteos'),
-      sucursalId && lotesHabilitados ? api.get(`/lotes/sucursal/${sucursalId}/por-vencer?dias=30`) : [],
+      stockOn ? api.get('/conteos') : [],
+      sucursalId && stockOn && lotesHabilitados ? api.get(`/lotes/sucursal/${sucursalId}/por-vencer?dias=30`) : [],
     ]);
     loading.remove();
 
@@ -34,15 +36,15 @@ export async function adminDashboard() {
       colStat(statCard('Productos', productos.length, 'bi-box-seam', '#2563eb')),
       colStat(statCard('Categorías', categorias.length, 'bi-tags', '#0891b2')),
       colStat(statCard('Proveedores', proveedores.length, 'bi-truck', '#7c3aed')),
-      colStat(statCard('Conteos activos', conteos.length, 'bi-clipboard-check', '#16a34a')),
-      lotesHabilitados ? colStat(clickable(
+      stockOn ? colStat(statCard('Conteos activos', conteos.length, 'bi-clipboard-check', '#16a34a')) : null,
+      stockOn && lotesHabilitados ? colStat(clickable(
         statCard('Lotes por vencer', porVencer.length, 'bi-hourglass-split', colorLotes),
         '#/admin/gestionar-lotes?filtro=porVencer'
       )) : null,
     ]));
 
-    content.append(h('h5', { class: 'fw-semibold mb-3' }, 'Accesos rápidos'));
-    content.append(h('div', { class: 'row g-3' }, [
+    content.append(h('h5', { class: 'fw-semibold mb-3' }, 'Inventario'));
+    content.append(h('div', { class: 'row g-3 mb-4' }, [
       col(quickCard('Productos', 'bi-box-seam', '#/admin/gestionar-productos')),
       col(quickCard('Categorías', 'bi-tags', '#/admin/gestionar-categorias')),
       col(quickCard('Lotes', 'bi-boxes', '#/admin/gestionar-lotes', {
@@ -50,10 +52,26 @@ export async function adminDashboard() {
         title: 'Apartado no habilitado para esta sucursal. Lo activa el superadministrador.',
       })),
       col(quickCard('Proveedores', 'bi-truck', '#/admin/gestionar-proveedores')),
-      col(quickCard('Conteos', 'bi-clipboard-check', '#/admin/gestionar-conteos')),
-      col(quickCard('Empleados', 'bi-people', '#/admin/gestionar-empleados')),
-      col(quickCard('Estadísticas', 'bi-graph-up', '#/admin/estadisticas')),
     ]));
+
+    if (stockOn) {
+      content.append(h('h5', { class: 'fw-semibold mb-3' }, 'Control de stock'));
+      content.append(h('div', { class: 'row g-3 mb-4' }, [
+        col(quickCard('Conteos', 'bi-clipboard-check', '#/admin/gestionar-conteos')),
+        col(quickCard('Conteos finalizados', 'bi-clipboard-data', '#/admin/conteos-finalizados')),
+        col(quickCard('Empleados', 'bi-people', '#/admin/gestionar-empleados')),
+        col(quickCard('Estadísticas de conteos', 'bi-graph-up', '#/admin/estadisticas')),
+      ]));
+    }
+
+    if (facturacionOn) {
+      content.append(h('h5', { class: 'fw-semibold mb-3' }, 'Facturación'));
+      content.append(h('div', { class: 'row g-3' }, [
+        col(quickCard('Ventas realizadas', 'bi-receipt', '#/admin/ventas')),
+        col(quickCard('Clientes', 'bi-person-vcard', '#/admin/clientes')),
+        col(quickCard('Estadísticas de facturación', 'bi-bar-chart-line', '#/admin/estadisticas-facturacion')),
+      ]));
+    }
   } catch (err) {
     loading.remove();
     content.append(h('div', { class: 'alert alert-danger' }, `No se pudieron cargar los datos: ${err.message}`));

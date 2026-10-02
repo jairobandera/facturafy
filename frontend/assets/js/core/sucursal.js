@@ -109,3 +109,18 @@ export function usaLotes() {
   const s = sucursalActual();
   return s ? s.usaLotes !== false : true;
 }
+
+/**
+ * Paquetes contratados por la sucursal (los configura el superadmin).
+ * usaStock: ante la duda devuelve true (como usaLotes); el backend igual rechaza
+ * lo que no corresponda. usaFacturacion: por defecto false (no mostrar de mas).
+ */
+export function usaStock() {
+  const s = sucursalActual();
+  return s ? s.usaStock !== false : true;
+}
+
+export function usaFacturacion() {
+  const s = sucursalActual();
+  return s ? s.usaFacturacion === true : false;
+}

@@ -4,6 +4,7 @@ import { sendJson, sendNoContent } from '../../core/http.js';
 import { badRequest, notFound } from '../../core/httpError.js';
 import { publish } from '../../core/ws.js';
 import { assertAccesoASucursal } from '../usuario/acceso.js';
+import { assertUsaStock } from '../sucursal/paquetes.js';
 
 const SELECT = `
   SELECT id, fecha_hora AS fechaHora, conteo_finalizado AS conteoFinalizado,
@@ -84,6 +85,8 @@ async function resolverSucursal(dto) {
   const suc = await query(`SELECT id FROM sucursal WHERE id = ? AND activo = 1`, [sucursalId]);
   if (!suc.length) throw badRequest(`Sucursal no encontrada o inactiva: ${sucursalId}`);
 
+  // Los conteos pertenecen al paquete de control de stock.
+  await assertUsaStock(sucursalId);
   await assertAccesoASucursal(dto.usuarioId, sucursalId);
   return Number(sucursalId);
 }

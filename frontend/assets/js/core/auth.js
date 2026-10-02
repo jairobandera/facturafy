@@ -58,6 +58,7 @@ export const auth = {
       case 'SUPERADMINISTRADOR': return '#/superadmin/dashboard';
       case 'ADMINISTRADOR': return '#/admin/dashboard';
       case 'EMPLEADO': return '#/empleado/dashboard';
+      case 'CAJERO': return '#/facturacion/dashboard';
       default: return '#/login';
     }
   },

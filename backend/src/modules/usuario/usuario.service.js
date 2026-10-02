@@ -3,7 +3,7 @@ import { hashPassword } from '../../core/password.js';
 import { badRequest, notFound } from '../../core/httpError.js';
 import { toBool } from '../../core/sql.js';
 
-const ROLES = ['EMPLEADO', 'ADMINISTRADOR', 'SUPERADMINISTRADOR'];
+const ROLES = ['EMPLEADO', 'CAJERO', 'ADMINISTRADOR', 'SUPERADMINISTRADOR'];
 
 function assertRol(rol) {
   if (rol === null || rol === undefined) return null;

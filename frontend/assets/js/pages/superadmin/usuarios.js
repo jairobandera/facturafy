@@ -8,6 +8,7 @@ const ROLES = [
   { value: 'SUPERADMINISTRADOR', label: 'Super Administrador' },
   { value: 'ADMINISTRADOR', label: 'Administrador' },
   { value: 'EMPLEADO', label: 'Empleado' },
+  { value: 'CAJERO', label: 'Cajero' },
 ];
 
 

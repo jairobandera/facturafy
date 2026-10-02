@@ -4,6 +4,9 @@
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS venta_detalle;
+DROP TABLE IF EXISTS venta;
+DROP TABLE IF EXISTS cliente;
 DROP TABLE IF EXISTS reporte_conteo;
 DROP TABLE IF EXISTS producto_proveedor;
 DROP TABLE IF EXISTS conteo_usuario;
@@ -43,6 +46,12 @@ CREATE TABLE sucursal (
   -- Habilita el apartado de Lotes para los administradores de esta sucursal.
   -- Si esta en 0, el menu queda deshabilitado y la API de lotes rechaza la sucursal.
   usa_lotes  BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Paquetes contratados por la sucursal (los configura el superadmin):
+  --   usa_stock:       control de stock (conteos + estadisticas de conteo).
+  --   usa_facturacion: facturacion (punto de venta + ventas + clientes).
+  -- Una empresa puede tener una sucursal con el paquete completo y otra con uno solo.
+  usa_stock       BOOLEAN NOT NULL DEFAULT TRUE,
+  usa_facturacion BOOLEAN NOT NULL DEFAULT FALSE,
   CONSTRAINT fk_sucursal_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -212,4 +221,79 @@ CREATE TABLE reporte_conteo (
   PRIMARY KEY (reporte_id, conteo_id),
   CONSTRAINT fk_rc_reporte FOREIGN KEY (reporte_id) REFERENCES reporte(id) ON DELETE CASCADE,
   CONSTRAINT fk_rc_conteo  FOREIGN KEY (conteo_id)  REFERENCES conteo(id)  ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+--  FACTURACION
+-- ============================================================
+
+-- ---------------- CLIENTE ----------------
+-- Scoped por sucursal. El RUT es opcional (el consumidor final no crea cliente)
+-- y es unico dentro de la sucursal cuando esta presente.
+CREATE TABLE cliente (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  rut             VARCHAR(50),
+  razon_social    VARCHAR(255),
+  nombre_fantasia VARCHAR(255),
+  direccion       VARCHAR(255),
+  telefono        VARCHAR(255),
+  email           VARCHAR(255),
+  -- Tipo de documento (preparado para la factura electronica de Uruguay).
+  tipo_documento  VARCHAR(20) NOT NULL DEFAULT 'RUT',
+  sucursal_id     BIGINT NOT NULL,
+  activo          BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uk_cliente_rut_sucursal UNIQUE (rut, sucursal_id),
+  CONSTRAINT fk_cliente_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- VENTA ----------------
+-- Registro interno de la venta. Las columnas cfe_* quedan preparadas para la
+-- factura electronica de Uruguay (DGI/CFE): hoy la venta nace con estado INTERNO.
+CREATE TABLE venta (
+  id                   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  fecha_hora           DATETIME,
+  sucursal_id          BIGINT NOT NULL,
+  usuario_id           BIGINT,              -- cajero que emitio la venta
+  cliente_id           BIGINT,              -- NULL = consumidor final
+  consumidor_final     BOOLEAN NOT NULL DEFAULT TRUE,
+  subtotal             FLOAT NOT NULL DEFAULT 0,
+  descuento            FLOAT NOT NULL DEFAULT 0,
+  total                FLOAT NOT NULL DEFAULT 0,
+  forma_pago           VARCHAR(20) NOT NULL DEFAULT 'CONTADO', -- CONTADO | CREDITO
+  estado               VARCHAR(20) NOT NULL DEFAULT 'EMITIDA', -- EMITIDA | ANULADA
+  motivo_anulacion     VARCHAR(500),
+  fecha_anulacion      DATETIME,
+  usuario_anulacion_id BIGINT,
+  activo               BOOLEAN NOT NULL DEFAULT TRUE,
+  -- ---- Factura electronica (DGI/CFE Uruguay) - preparado, hoy sin uso ----
+  cfe_tipo             VARCHAR(20),         -- E_TICKET | E_FACTURA
+  cfe_serie            VARCHAR(10),
+  cfe_numero           BIGINT,
+  cfe_estado           VARCHAR(20) NOT NULL DEFAULT 'INTERNO', -- INTERNO|PENDIENTE|AUTORIZADO|RECHAZADO
+  cfe_uuid             VARCHAR(100),
+  cfe_cae              VARCHAR(100),
+  cfe_qr_url           VARCHAR(500),
+  cfe_hash             VARCHAR(255),
+  INDEX idx_venta_sucursal_estado (sucursal_id, estado),
+  INDEX idx_venta_fecha (fecha_hora),
+  CONSTRAINT fk_venta_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id),
+  CONSTRAINT fk_venta_usuario  FOREIGN KEY (usuario_id)  REFERENCES usuario(id),
+  CONSTRAINT fk_venta_cliente  FOREIGN KEY (cliente_id)  REFERENCES cliente(id),
+  CONSTRAINT fk_venta_usuario_anulacion FOREIGN KEY (usuario_anulacion_id) REFERENCES usuario(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- VENTA_DETALLE (renglones) ----------------
+-- Guarda snapshot de codigo/nombre/precio: si despues editan el producto, el
+-- historial de la venta no cambia.
+CREATE TABLE venta_detalle (
+  id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  venta_id        BIGINT NOT NULL,
+  producto_id     BIGINT,
+  codigo_producto VARCHAR(255),
+  nombre          VARCHAR(255),
+  precio_unitario FLOAT NOT NULL DEFAULT 0,
+  cantidad        INT NOT NULL DEFAULT 0,
+  subtotal        FLOAT NOT NULL DEFAULT 0,
+  CONSTRAINT fk_vd_venta    FOREIGN KEY (venta_id)    REFERENCES venta(id) ON DELETE CASCADE,
+  CONSTRAINT fk_vd_producto FOREIGN KEY (producto_id) REFERENCES producto(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

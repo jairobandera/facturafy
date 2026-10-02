@@ -15,6 +15,9 @@ import { conteoUsuarioRoutes } from './modules/conteoUsuario/conteoUsuario.modul
 import { sucursalProveedorRoutes } from './modules/sucursalProveedor/sucursalProveedor.module.js';
 import { reporteRoutes } from './modules/reporte/reporte.module.js';
 import { estadisticaRoutes } from './modules/estadistica/estadistica.module.js';
+import { clienteRoutes } from './modules/cliente/cliente.module.js';
+import { ventaRoutes } from './modules/venta/venta.routes.js';
+import { estadisticaVentaRoutes } from './modules/estadisticaVenta/estadisticaVenta.module.js';
 
 export function buildApiRouter() {
   const api = new Router();
@@ -32,5 +35,9 @@ export function buildApiRouter() {
   api.use('/sucursal-proveedor', sucursalProveedorRoutes);
   api.use('/reportes', reporteRoutes);
   api.use('/estadisticas', estadisticaRoutes);
+  // Facturacion
+  api.use('/clientes', clienteRoutes);
+  api.use('/ventas', ventaRoutes);
+  api.use('/estadisticas-venta', estadisticaVentaRoutes);
   return api;
 }

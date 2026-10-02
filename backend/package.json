@@ -1,7 +1,7 @@
 {
-  "name": "stockify-backend",
-  "version": "2.0.0",
-  "description": "Stockify 2.0 backend - Node.js crudo (http nativo + ws) + MySQL",
+  "name": "facturafy-backend",
+  "version": "1.0.0",
+  "description": "Facturafy backend - facturacion y control de stock - Node.js crudo (http nativo + ws) + MySQL",
   "type": "module",
   "main": "server.js",
   "scripts": {

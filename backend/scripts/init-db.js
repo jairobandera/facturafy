@@ -40,6 +40,7 @@ async function main() {
   console.log('     - admin        (ADMINISTRADOR, Sucursal Centro)');
   console.log('     - empleado     (EMPLEADO, Sucursal Centro)');
   console.log('     - empleado2    (EMPLEADO, cuenta en cualquier sucursal)');
+  console.log('     - cajero       (CAJERO, Sucursal Centro, facturacion)');
 }
 
 async function seed(conn) {
@@ -51,14 +52,16 @@ async function seed(conn) {
   const empresaId = empRes.insertId;
 
   // Sucursales
+  // Centro: paquete COMPLETO (control de stock + facturacion) para probar todo.
   const [suc1] = await conn.query(
-    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id) VALUES (?,?,?,?)`,
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion) VALUES (?,?,?,?,1,1)`,
     ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId]
   );
   const sucursalId = suc1.insertId;
-  // Pocitos queda sin el apartado de Lotes para mostrar la opcion del superadmin.
+  // Pocitos queda SOLO con control de stock y sin el apartado de Lotes, para mostrar
+  // las opciones del superadmin (paquetes y lotes se habilitan por sucursal).
   const [suc2] = await conn.query(
-    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_lotes) VALUES (?,?,?,?,0)`,
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion) VALUES (?,?,?,?,0,1,0)`,
     ['Sucursal Pocitos', 'Av. Brasil 2500', '099555666', empresaId]
   );
   const sucursal2Id = suc2.insertId;
@@ -67,14 +70,23 @@ async function seed(conn) {
   const pass = await hashPassword('12345');
   await conn.query(
     // "empleado2" tiene cuenta_en_cualquier_sucursal = 1: cuenta en las dos sucursales.
+    // "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
     `INSERT INTO usuario (nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-      (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?)`,
+      (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?), (?,?,?,?,?,?,?)`,
     [
       'Sofia', 'Perez', 'superadmin', pass, 'SUPERADMINISTRADOR', sucursalId, 0,
       'Martin', 'Gomez', 'admin', pass, 'ADMINISTRADOR', sucursalId, 0,
       'Lucia', 'Fernandez', 'empleado', pass, 'EMPLEADO', sucursalId, 0,
       'Diego', 'Rodriguez', 'empleado2', pass, 'EMPLEADO', sucursalId, 1,
+      'Carla', 'Lopez', 'cajero', pass, 'CAJERO', sucursalId, 0,
     ]
+  );
+
+  // Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT.
+  await conn.query(
+    `INSERT INTO cliente (rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, sucursal_id)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    ['216000000013', 'Comercio del Este S.R.L.', 'El Este', 'Av. Italia 3000', '099777888', 'ventas@eleste.com', 'RUT', sucursalId]
   );
 
   // Categorias

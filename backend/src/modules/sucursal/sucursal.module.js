@@ -12,6 +12,10 @@ export const sucursalCrud = createCrud({
     { col: 'empresa_id', field: 'empresaId' },
     // Habilita el apartado de Lotes para los administradores de la sucursal.
     { col: 'usa_lotes', field: 'usaLotes', bool: true, default: true },
+    // Paquetes contratados por la sucursal (los configura el superadmin):
+    //   usaStock -> control de stock (conteos), usaFacturacion -> facturacion.
+    { col: 'usa_stock', field: 'usaStock', bool: true, default: true },
+    { col: 'usa_facturacion', field: 'usaFacturacion', bool: true, default: false },
   ],
 });
 
@@ -23,7 +27,7 @@ export const sucursalRoutes = sucursalCrud.buildRoutes((routes, { normalize }) =
   routes.get('/empresa/:empresaId', async (ctx, res) => {
     const rows = await query(
       `SELECT id, nombre, direccion, telefono, empresa_id AS empresaId,
-              usa_lotes AS usaLotes, activo
+              usa_lotes AS usaLotes, usa_stock AS usaStock, usa_facturacion AS usaFacturacion, activo
          FROM sucursal
         WHERE empresa_id = ? AND activo = 1
         ORDER BY nombre`,

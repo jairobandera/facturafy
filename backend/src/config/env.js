@@ -41,11 +41,22 @@ export const config = {
     port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASS || '',
-    database: process.env.DB_NAME || 'stockify',
+    database: process.env.DB_NAME || 'facturafy',
   },
   jwt: {
     secret: process.env.JWT_SECRET || '@TI2025',
     expirationHours: Number(process.env.JWT_EXPIRATION_HOURS || 10),
   },
   serveFrontend: String(process.env.SERVE_FRONTEND || 'true') === 'true',
+  // Factura electronica de Uruguay (DGI/CFE). Hoy apagado: las ventas se registran
+  // internamente. Cuando haya credenciales, poner CFE_ENABLED=true y completar el
+  // proveedor en src/modules/facturacion/cfe.js (el resto ya esta preparado).
+  cfe: {
+    enabled: String(process.env.CFE_ENABLED || 'false') === 'true',
+    provider: process.env.CFE_PROVIDER || '',
+    apiUrl: process.env.CFE_API_URL || '',
+    apiKey: process.env.CFE_API_KEY || '',
+    rutEmisor: process.env.CFE_RUT_EMISOR || '',
+    certPath: process.env.CFE_CERT_PATH || '',
+  },
 };

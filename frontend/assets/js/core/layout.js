@@ -1,8 +1,11 @@
 // Renderiza el "shell" de la aplicacion (sidebar + topbar) y provee el area de contenido.
 import { h, clear } from './dom.js';
 import { auth } from './auth.js';
-import { usaLotes } from './sucursal.js';
+import { usaLotes, usaStock, usaFacturacion } from './sucursal.js';
 
+// Secciones/items con `oculto: true` desaparecen cuando su `requiere()` da false
+// (paquetes de la sucursal). Los que tienen `requiere` sin `oculto` (Lotes) se
+// muestran en gris con candado, como hasta ahora.
 const NAV = {
   SUPERADMINISTRADOR: [
     { section: 'General' },
@@ -16,6 +19,8 @@ const NAV = {
     { section: 'Usuarios' },
     { icon: 'bi-people', label: 'Ver usuarios', href: '#/superadmin/ver-usuarios' },
     { icon: 'bi-person-plus', label: 'Crear usuario', href: '#/superadmin/crear-usuario' },
+    { section: 'Configuracion' },
+    { icon: 'bi-sliders', label: 'Configuraciones', href: '#/superadmin/configuraciones' },
   ],
   ADMINISTRADOR: [
     { section: 'General' },
@@ -26,15 +31,28 @@ const NAV = {
     { icon: 'bi-boxes', label: 'Lotes', href: '#/admin/gestionar-lotes', requiere: usaLotes },
     { icon: 'bi-truck', label: 'Proveedores', href: '#/admin/gestionar-proveedores' },
     { icon: 'bi-file-earmark-arrow-down', label: 'Plantillas', href: '#/admin/plantillas' },
-    { section: 'Operacion' },
-    { icon: 'bi-clipboard-check', label: 'Conteos', href: '#/admin/gestionar-conteos' },
-    { icon: 'bi-clipboard-data', label: 'Conteos finalizados', href: '#/admin/conteos-finalizados' },
-    { icon: 'bi-people', label: 'Empleados', href: '#/admin/gestionar-empleados' },
-    { icon: 'bi-graph-up', label: 'Estadisticas', href: '#/admin/estadisticas' },
+    // Control de stock (paquete usa_stock)
+    { section: 'Control de stock', requiere: usaStock, oculto: true },
+    { icon: 'bi-clipboard-check', label: 'Conteos', href: '#/admin/gestionar-conteos', requiere: usaStock, oculto: true },
+    { icon: 'bi-clipboard-data', label: 'Conteos finalizados', href: '#/admin/conteos-finalizados', requiere: usaStock, oculto: true },
+    { icon: 'bi-people', label: 'Empleados', href: '#/admin/gestionar-empleados', requiere: usaStock, oculto: true },
+    { icon: 'bi-graph-up', label: 'Estadisticas de conteos', href: '#/admin/estadisticas', requiere: usaStock, oculto: true },
+    // Facturacion (paquete usa_facturacion)
+    { section: 'Facturacion', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-receipt', label: 'Ventas realizadas', href: '#/admin/ventas', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-person-vcard', label: 'Clientes', href: '#/admin/clientes', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-bar-chart-line', label: 'Estadisticas de facturacion', href: '#/admin/estadisticas-facturacion', requiere: usaFacturacion, oculto: true },
   ],
   EMPLEADO: [
     { section: 'General' },
     { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/empleado/dashboard' },
+  ],
+  CAJERO: [
+    { section: 'General' },
+    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/facturacion/dashboard' },
+    { section: 'Facturacion' },
+    { icon: 'bi-cart-plus', label: 'Punto de venta', href: '#/facturacion/pos' },
+    { icon: 'bi-person-vcard', label: 'Clientes', href: '#/facturacion/clientes' },
   ],
 };
 
@@ -42,6 +60,7 @@ const ROLE_LABEL = {
   SUPERADMINISTRADOR: 'Super Admin',
   ADMINISTRADOR: 'Administrador',
   EMPLEADO: 'Empleado',
+  CAJERO: 'Cajero',
 };
 
 let contentEl = null;
@@ -79,10 +98,13 @@ export function resetShell() {
 }
 
 function buildSidebar(role) {
-  const items = (NAV[role] || []).map((item) => {
-    if (item.section) return h('div', { class: 'sk-nav-section' }, item.section);
-    // Apartado opcional deshabilitado para esta sucursal: se muestra en gris y sin enlace.
-    if (item.requiere && !item.requiere()) {
+  const items = (NAV[role] || [])
+    // Items/secciones con `oculto`: se quitan del todo cuando no aplica el paquete.
+    .filter((item) => !(item.oculto && item.requiere && !item.requiere()))
+    .map((item) => {
+      if (item.section) return h('div', { class: 'sk-nav-section' }, item.section);
+      // Apartado opcional deshabilitado para esta sucursal: se muestra en gris y sin enlace.
+      if (item.requiere && !item.requiere()) {
       return h('span', {
         class: 'sk-nav-disabled',
         title: 'Apartado no habilitado para esta sucursal. Lo activa el superadministrador.',
@@ -93,7 +115,7 @@ function buildSidebar(role) {
     ]);
   });
   return h('aside', { class: 'sk-sidebar', id: 'sk-sidebar' }, [
-    h('div', { class: 'sk-sidebar-brand' }, [h('i', { class: 'bi bi-box-seam-fill' }), 'Stockify']),
+    h('div', { class: 'sk-sidebar-brand' }, [h('i', { class: 'bi bi-receipt-cutoff' }), 'Facturafy']),
     h('ul', { class: 'sk-nav' }, items),
     h('div', { style: { padding: '1rem' } }, [
       h('button', { class: 'btn btn-outline-light btn-sm w-100', onClick: () => auth.logout() },
