@@ -105,6 +105,53 @@ function buildField(f, inputs, setOptions) {
     return col;
   }
 
+  // Campo de contraseña con botón de ojo para ver/ocultar (por defecto oculta).
+  if (f.type === 'password') {
+    const input = h('input', {
+      class: 'form-control', id, type: 'password', value: f.value ?? '',
+      placeholder: f.placeholder || '', autocomplete: f.autocomplete ?? 'new-password',
+    });
+    const icono = h('i', { class: 'bi bi-eye' });
+    const toggle = h('button', { type: 'button', class: 'btn btn-outline-secondary', tabindex: '-1', title: 'Ver/ocultar' }, [icono]);
+    toggle.addEventListener('click', () => {
+      const oculto = input.type === 'password';
+      input.type = oculto ? 'text' : 'password';
+      icono.className = oculto ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
+    inputs[f.name] = input;
+    const labelPwd = h('label', { class: 'form-label', for: id }, [
+      f.label, f.required ? h('span', { class: 'text-danger' }, ' *') : null,
+    ]);
+    const help = f.help ? h('div', { class: 'form-text' }, f.help) : null;
+    const group = h('div', { class: 'input-group' }, [input, toggle]);
+    for (const node of [labelPwd, group, help]) if (node) col.append(node);
+    return col;
+  }
+
+  // Grupo de radios en linea (por ejemplo: tipo de documento RUT / Cédula).
+  if (f.type === 'radiogroup') {
+    const opts = f.options || [];
+    const grupo = `rg_${f.name}`;
+    const seleccion = f.value != null ? String(f.value) : String(opts[0]?.value ?? '');
+    const wrap = h('div', { class: 'd-flex flex-wrap gap-3 sk-radiogroup' });
+    opts.forEach((o, i) => {
+      const rid = `${id}_${i}`;
+      const input = h('input', {
+        class: 'form-check-input', type: 'radio', name: grupo, id: rid,
+        value: String(o.value), checked: String(o.value) === seleccion,
+      });
+      if (typeof f.onChange === 'function') {
+        input.addEventListener('change', () => { if (input.checked) f.onChange(o.value); });
+      }
+      wrap.append(h('div', { class: 'form-check' }, [input, h('label', { class: 'form-check-label', for: rid }, o.label)]));
+    });
+    inputs[f.name] = wrap;
+    const help = f.help ? h('div', { class: 'form-text' }, f.help) : null;
+    const labelEl = h('label', { class: 'form-label d-block' }, f.label);
+    for (const node of [labelEl, wrap, help]) if (node) col.append(node);
+    return col;
+  }
+
   // Select con buscador: para listas largas (productos) donde un <select> obliga
   // a scrollear cientos de opciones. Se escribe parte del nombre y se elige.
   if (f.type === 'searchselect') {
@@ -325,6 +372,7 @@ function collectValues(fields, inputs) {
   for (const f of fields) {
     const el = inputs[f.name];
     if (f.type === 'checkbox') values[f.name] = el.checked;
+    else if (f.type === 'radiogroup') values[f.name] = el.querySelector('input[type=radio]:checked')?.value ?? null;
     else if (f.type === 'searchselect') values[f.name] = el.value === '' ? null : el.value;
     else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
     else if (f.type === 'multiselect') values[f.name] = Array.from(el.selectedOptions).map((o) => o.value);

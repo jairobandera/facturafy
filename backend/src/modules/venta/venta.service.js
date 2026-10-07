@@ -1,8 +1,13 @@
 import { query, transaction } from '../../config/db.js';
-import { badRequest, notFound } from '../../core/httpError.js';
+import { badRequest, notFound, forbidden } from '../../core/httpError.js';
 import { assertUsaFacturacion } from '../sucursal/paquetes.js';
 import { emitirCFE } from '../facturacion/cfe.js';
 import { ventaRepository } from './venta.repository.js';
+import { saldoConConn, cargarVenta, revertirVenta } from '../cliente/cuenta.js';
+
+function money(n) {
+  return Number(n || 0).toLocaleString('es-UY', { style: 'currency', currency: 'UYU', minimumFractionDigits: 2 });
+}
 
 const FORMAS_PAGO = ['CONTADO', 'CREDITO'];
 
@@ -22,18 +27,35 @@ function round2(n) {
  * El cliente debe pertenecer a la sucursal de la venta.
  */
 async function resolverCliente(conn, dto, sucursalId) {
-  if (!dto.clienteId) return { clienteId: null, consumidorFinal: true };
+  if (!dto.clienteId) return { clienteId: null, consumidorFinal: true, limiteCredito: 0 };
   const [rows] = await conn.execute(
-    `SELECT id FROM cliente WHERE id = ? AND sucursal_id = ? AND activo = 1`,
+    `SELECT id, limite_credito AS limiteCredito FROM cliente WHERE id = ? AND sucursal_id = ? AND activo = 1`,
     [dto.clienteId, sucursalId]
   );
   if (!rows.length) throw badRequest('El cliente no pertenece a esta sucursal o no existe');
-  return { clienteId: Number(dto.clienteId), consumidorFinal: false };
+  return { clienteId: Number(dto.clienteId), consumidorFinal: false, limiteCredito: Number(rows[0].limiteCredito || 0) };
+}
+
+/**
+ * Resuelve el turno de la venta. El POS siempre manda el turno abierto; el turno
+ * debe estar ABIERTO y pertenecer a la sucursal de la venta.
+ */
+async function resolverTurno(conn, dto, sucursalId) {
+  if (!dto.turnoId) return null;
+  const [rows] = await conn.execute(
+    `SELECT id, estado FROM turno WHERE id = ? AND sucursal_id = ?`,
+    [dto.turnoId, sucursalId]
+  );
+  if (!rows.length) throw badRequest('El turno no pertenece a esta sucursal o no existe');
+  if (rows[0].estado !== 'ABIERTO') throw badRequest('El turno está cerrado: no se pueden registrar ventas');
+  return Number(dto.turnoId);
 }
 
 export const ventaService = {
   getById: (id) => ventaRepository.findById(id),
   getBySucursal: (sucursalId, filtros) => ventaRepository.findBySucursal(sucursalId, filtros),
+  getByTurno: (turnoId) => ventaRepository.findByTurno(turnoId),
+  getByCliente: (clienteId) => ventaRepository.findByCliente(clienteId),
 
   /**
    * Registra una venta: valida el paquete, recalcula los totales en el servidor
@@ -52,7 +74,12 @@ export const ventaService = {
     if (!FORMAS_PAGO.includes(formaPago)) throw badRequest(`Forma de pago invalida: ${formaPago}`);
 
     const id = await transaction(async (conn) => {
-      const { clienteId, consumidorFinal } = await resolverCliente(conn, dto, sucursalId);
+      const { clienteId, consumidorFinal, limiteCredito } = await resolverCliente(conn, dto, sucursalId);
+      // Una venta a credito exige un cliente registrado (a quien cobrarle despues).
+      if (formaPago === 'CREDITO' && !clienteId) {
+        throw badRequest('Una venta a crédito requiere un cliente registrado');
+      }
+      const turnoId = await resolverTurno(conn, dto, sucursalId);
 
       // Unifica por producto por las dudas (el carrito ya unifica en el front).
       const porProducto = new Map();
@@ -90,12 +117,26 @@ export const ventaService = {
       const total = round2(subtotal - descuento);
       if (total < 0) throw badRequest('El descuento no puede ser mayor al subtotal');
 
+      // Limite de credito: una venta a credito no puede dejar el saldo del cliente por
+      // encima de su limite. 0 = sin limite.
+      if (formaPago === 'CREDITO' && clienteId && limiteCredito > 0) {
+        const saldo = await saldoConConn(conn, clienteId);
+        if (saldo + total > limiteCredito) {
+          const disponible = Math.max(0, round2(limiteCredito - saldo));
+          throw badRequest(
+            `No se puede facturar a crédito: supera el límite del cliente. ` +
+            `Límite ${money(limiteCredito)}, deuda actual ${money(saldo)}, disponible ${money(disponible)}; ` +
+            `esta venta es ${money(total)}.`
+          );
+        }
+      }
+
       const [res] = await conn.execute(
         `INSERT INTO venta
-           (fecha_hora, sucursal_id, usuario_id, cliente_id, consumidor_final,
+           (fecha_hora, sucursal_id, turno_id, usuario_id, cliente_id, consumidor_final,
             subtotal, descuento, total, forma_pago, estado, activo, cfe_estado)
-         VALUES (?,?,?,?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
-        [nowDateTime(), sucursalId, dto.usuarioId ?? null, clienteId, consumidorFinal ? 1 : 0,
+         VALUES (?,?,?,?,?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
+        [nowDateTime(), sucursalId, turnoId, dto.usuarioId ?? null, clienteId, consumidorFinal ? 1 : 0,
          subtotal, descuento, total, formaPago]
       );
       const ventaId = res.insertId;
@@ -113,6 +154,11 @@ export const ventaService = {
           `UPDATE producto SET cantidad_stock = cantidad_stock - ? WHERE id = ?`,
           [r.cantidad, r.productoId]
         );
+      }
+
+      // Venta a credito: carga la deuda en la cuenta corriente del cliente.
+      if (formaPago === 'CREDITO' && clienteId) {
+        await cargarVenta(conn, { clienteId, ventaId, monto: total, descripcion: `Venta #${ventaId}`, usuarioId: dto.usuarioId });
       }
       return ventaId;
     });
@@ -133,16 +179,35 @@ export const ventaService = {
    * Anula una venta EMITIDA: exige motivo, marca ANULADA y DEVUELVE el stock de
    * cada renglon al producto. No se puede anular dos veces.
    */
-  async anular(id, { motivo, usuarioId } = {}) {
+  async anular(id, { motivo, usuarioId, pin, requierePin } = {}) {
     const limpio = String(motivo ?? '').trim();
     if (!limpio) throw badRequest('El motivo de anulacion es obligatorio');
 
     await transaction(async (conn) => {
       const [ventas] = await conn.execute(
-        `SELECT id, estado FROM venta WHERE id = ? FOR UPDATE`, [id]
+        `SELECT id, estado, sucursal_id AS sucursalId FROM venta WHERE id = ? FOR UPDATE`, [id]
       );
       if (!ventas.length) throw notFound(`Venta no encontrada con id: ${id}`);
       if (ventas[0].estado === 'ANULADA') throw badRequest('La venta ya estaba anulada');
+
+      // Cuando la anulacion la pide un cajero (no un admin), exige uno de los PINes
+      // de autorizacion activos de la sucursal.
+      if (requierePin) {
+        const ingresado = String(pin ?? '').trim();
+        const [cfg] = await conn.execute(
+          `SELECT COUNT(*) AS n FROM sucursal_pin WHERE sucursal_id = ? AND activo = 1`,
+          [ventas[0].sucursalId]
+        );
+        if (Number(cfg[0].n) === 0) {
+          throw badRequest('La sucursal no tiene configurado un PIN de autorización. Pedíselo al administrador.');
+        }
+        if (!ingresado) throw badRequest('Ingresá el PIN de autorización');
+        const [match] = await conn.execute(
+          `SELECT id FROM sucursal_pin WHERE sucursal_id = ? AND activo = 1 AND pin = ? LIMIT 1`,
+          [ventas[0].sucursalId, ingresado]
+        );
+        if (!match.length) throw forbidden('PIN de autorización incorrecto');
+      }
 
       const [detalles] = await conn.execute(
         `SELECT producto_id AS productoId, cantidad FROM venta_detalle WHERE venta_id = ?`, [id]
@@ -159,6 +224,8 @@ export const ventaService = {
                           usuario_anulacion_id = ? WHERE id = ?`,
         [limpio, nowDateTime(), usuarioId ?? null, id]
       );
+      // Si era una venta a credito, saca su cargo de la cuenta corriente del cliente.
+      await revertirVenta(conn, id);
     });
     return ventaRepository.findById(id);
   },

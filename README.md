@@ -19,29 +19,46 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
   y/o la facturación de cada sucursal. El menú y las secciones se adaptan a lo contratado.
 - **Roles**:
   - `SUPERADMINISTRADOR` — gestiona empresas, sucursales, usuarios y los paquetes de cada sucursal.
-  - `ADMINISTRADOR` — gestiona el inventario, los conteos y, en facturación, ve las **ventas
-    realizadas**, las **anula**, consulta las **estadísticas de facturación** y da de alta clientes.
+    Al dar de alta/editar una sucursal, configura su **correo de envío** (SMTP propio por sucursal).
+  - `ADMINISTRADOR` — gestiona el inventario y los conteos y, en facturación: ve las **ventas
+    realizadas** y las anula, ve **estadísticas de facturación**, gestiona **clientes y su cuenta
+    corriente** (crédito, pagos, mora, límite, estado de cuenta por email), ve los **turnos de caja**
+    (historial + arqueo) y la **configuración** (PINes de anulación + límite de crédito por defecto).
     No vende.
   - `EMPLEADO` — participa en los conteos.
-  - `CAJERO` — opera el **punto de venta**: factura, da de alta clientes y anula ventas.
+  - `CAJERO` — opera el **punto de venta**: inicia/uniéndose a un **turno de caja**, factura, consulta
+    las ventas de su turno, anula ventas (con **PIN** de un supervisor) y cierra el turno (arqueo).
+    **No** da de alta clientes: solo busca clientes ya registrados para facturarles a crédito.
 - **Inventario** (compartido por ambos paquetes): categorías, productos (con código de barras),
   lotes y proveedores.
 
 ### Facturación
 
-- **Punto de venta (POS)** pensado para ser rápido:
-  - **Escaneo de código de barras**: con la cámara, o pasando el producto por un **lector físico**
-    (funciona incluso **sin** apretar ningún botón: estando en el POS, al escanear se busca el
-    producto y se abre el modal de cantidad).
-  - **Búsqueda manual** por nombre, código o código de barra.
+- **Turnos de caja**: el cajero, al entrar, **inicia un turno** (mañana / tarde / noche / otro) o se
+  **suma** al turno abierto de la sucursal (es **uno por sucursal** a la vez y lo comparten varios
+  cajeros; uno es el **responsable**). Hasta iniciar/unirse al turno, el POS y los clientes quedan
+  bloqueados. Al **cerrar** el turno (responsable o administrador) se genera el **reporte de arqueo**
+  (totales por forma de pago, ventas, anuladas, participantes) en pantalla y en **PDF**.
+- **Punto de venta (POS)** pensado para un **lector físico** de código de barras:
+  - Pasás el producto por el lector (funciona **sin** apretar ningún botón) o lo buscás con el botón
+    **Buscar producto** (por nombre, código o código de barra). *(El escaneo por cámara se quitó.)*
   - Carrito que **unifica productos iguales**, con subtotal, total y cantidad editable.
-  - Cliente por defecto **consumidor final**; opcionalmente un cliente por **RUT** (con alta rápida).
-  - Pago **contado** o **crédito**.
-  - Al facturar se registra la venta y **se descuenta el stock** de cada producto.
+  - Cliente por defecto **consumidor final**, o un **cliente registrado** elegido con buscador. Las
+    ventas a **crédito** exigen un cliente registrado y respetan su **límite de crédito**.
+  - Pago **contado** o **crédito**. Al facturar se registra la venta y **se descuenta el stock**.
   - **Comprobante en PDF**.
-- **Ventas realizadas** (administrador): historial con filtros por fecha y estado, detalle de cada
-  venta y **anulación con motivo obligatorio** (que **devuelve el stock** al inventario).
-- **Clientes**: alta/edición de clientes de facturación (RUT, razón social, etc.), por sucursal.
+- **Ventas del turno** (cajero): lista las ventas de su turno y permite **eliminarlas/anularlas**
+  ingresando **motivo + PIN** de autorización de un supervisor (devuelve el stock).
+- **Ventas realizadas** (administrador): historial con filtros por fecha y estado, detalle y
+  **anulación con motivo** (sin PIN, por ser admin). Devuelve el stock.
+- **Clientes y cuenta corriente** (administrador): alta/edición de clientes (RUT o **cédula** con
+  validación real, **email obligatorio**, **límite de crédito**). Por cliente: **informe de facturas**
+  (ver productos, **imprimir boleta** PDF), **resumen de gastos y deuda**, registrar **pagos**, aplicar
+  **mora** (monto fijo o % del saldo), editar el **límite** y **enviar el estado de cuenta** por email.
+- **Cierre de quincena**: envía por **email** (SMTP propio de la sucursal) el **estado de cuenta**
+  (facturas del período + saldo a pagar) a **uno, varios o todos** los clientes.
+- **Configuración** (administrador): **PINes de anulación** (hasta 3 por sucursal) y **límite de
+  crédito por defecto** para las cuentas nuevas.
 - **Estadísticas de facturación**: total facturado, contado vs crédito, ventas anuladas y productos
   más vendidos (separadas de las estadísticas de conteos).
 - **Factura electrónica de Uruguay (DGI/CFE)**: **preparada** (columnas, variables de entorno y un
@@ -71,9 +88,9 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
 | Auth        | **JWT** HS256 con el módulo `crypto` nativo · contraseñas `bcryptjs` |
 | Frontend    | **HTML + CSS + JavaScript puro** (SPA con módulos ES, sin build)  |
 
-> Dependencias del backend: solo `mysql2`, `ws` y `bcryptjs`.
-> El frontend usa Bootstrap, Bootstrap Icons, Chart.js, SweetAlert2, XLSX, jsPDF y
-> **html5-qrcode** (escaneo de códigos de barra) vía CDN.
+> Dependencias del backend: `mysql2`, `ws`, `bcryptjs` y **`nodemailer`** (envío de correo SMTP para
+> los estados de cuenta de la quincena).
+> El frontend usa Bootstrap, Bootstrap Icons, Chart.js, SweetAlert2, XLSX y jsPDF vía CDN.
 
 ## Requisitos
 
@@ -114,7 +131,28 @@ Para desarrollo con recarga automática: `npm run dev` (usa `node --watch`).
 | `cajero`     | CAJERO              | Sucursal Centro, opera el punto de venta      |
 
 > La sucursal **Centro** viene con el **paquete completo** y **Pocitos** con **solo control de
-> stock**, para probar cómo cambia el menú según lo contratado.
+> stock**, para probar cómo cambia el menú según lo contratado. Centro trae además **PINes de
+> anulación** de ejemplo (`1234` / `9999`) y un **límite de crédito por defecto** de `5000`.
+
+## Correo (envío de estados de cuenta)
+
+El estado de cuenta de la quincena se envía por **email (SMTP)**. Las credenciales se guardan
+**por sucursal en la base de datos**: el **superadministrador** las carga en el formulario de la
+sucursal (**correo de envío** + **contraseña de aplicación**). Cada sucursal envía desde su propia
+casilla. Si una sucursal no tiene credenciales propias, se usa como *fallback* el SMTP global del
+`.env` (opcional).
+
+Con **Gmail** necesitás una **contraseña de aplicación** de 16 caracteres (requiere Verificación en
+2 pasos activada). Se genera acá:
+
+**https://myaccount.google.com/apppasswords**
+
+Cargala **sin espacios** en el campo *Contraseña de aplicación* de la sucursal (tiene un ícono de ojo
+para verla). Valores típicos de Gmail: host `smtp.gmail.com`, puerto `465`, seguro `true`.
+
+> *Fallback global (opcional)*: podés dejar un SMTP por defecto en el `.env` con las variables
+> `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (ver `.env.example`).
+> El estado del envío se ve en **Configuración** (administrador).
 
 ## Base de datos
 
@@ -132,8 +170,16 @@ npm run db:init
 Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga datos de ejemplo.
 
 > **Ojo:** `schema.sql` **borra** todas las tablas antes de crearlas. Para una base que ya tiene
-> datos, en vez de reinicializar aplicá las migraciones a mano desde `backend/sql/migrations/`
-> (por ejemplo `006-facturacion.sql` agrega los paquetes y las tablas de facturación).
+> datos, en vez de reinicializar aplicá las migraciones a mano desde `backend/sql/migrations/`, en
+> orden:
+> - `006-facturacion.sql` — paquetes por sucursal + tablas de facturación (clientes, ventas).
+> - `007-turnos-y-anulacion.sql` — turnos de caja.
+> - `008-pines-y-cuenta-corriente.sql` — PINes de anulación, cuenta corriente y límites de crédito.
+> - `009-smtp-por-sucursal.sql` — credenciales de correo por sucursal.
+>
+> ```bash
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/009-smtp-por-sucursal.sql
+> ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente
 
@@ -208,7 +254,11 @@ Recursos de stock: `/seguridad/login`, `/usuarios`, `/empresas`, `/sucursales`, 
 `/proveedores`, `/productos`, `/lotes`, `/conteos`, `/conteoproducto`, `/conteo-usuarios`,
 `/sucursal-proveedor`, `/reportes`, `/estadisticas`.
 
-Recursos de facturación: `/clientes`, `/ventas`, `/estadisticas-venta`.
+Recursos de facturación: `/clientes` (CRUD + cuenta corriente: `/:id/cuenta`, `/:id/pagos`,
+`/:id/mora`, `/:id/limite`, `/quincena/enviar`), `/ventas` (incluye `/turno/:id` y `/cliente/:id`),
+`/turnos` (abrir, unirse, cerrar, reporte de arqueo) y `/estadisticas-venta`. `/sucursales` suma la
+gestión de **PINes** (`/:id/pines`) y de **correo SMTP** (`/:id/smtp`, la contraseña nunca se expone
+salvo al editar la sucursal).
 
 ## Notas
 
@@ -217,6 +267,8 @@ Recursos de facturación: `/clientes`, `/ventas`, `/estadisticas-venta`.
 - Para activar la **factura electrónica (DGI/CFE)**: poné `CFE_ENABLED=true` y las credenciales
   `CFE_*` en el `.env`, e implementá el envío al proveedor en
   `backend/src/modules/facturacion/cfe.js`. Las columnas `cfe_*` de la tabla `venta` ya existen.
-- El **escaneo por cámara** requiere un origen seguro (**HTTPS** o `localhost`). Desde un celular
-  por HTTP en la red local, la cámara queda bloqueada por el navegador (el lector físico sí funciona);
-  para usar la cámara en el celular, servilo por HTTPS (por ejemplo con un túnel como ngrok).
+- El **POS usa un lector físico** de código de barras (actúa como teclado). No usa la cámara.
+- Para el **envío de correo** (estados de cuenta): cargá el correo y la **contraseña de aplicación**
+  de cada sucursal (superadmin), o un SMTP global en el `.env`. Contraseñas de aplicación de Gmail:
+  **https://myaccount.google.com/apppasswords**. El `.env` (y por lo tanto las credenciales globales)
+  **no** se sube al repositorio.

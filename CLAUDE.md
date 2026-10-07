@@ -11,7 +11,8 @@ and DTO field names from Stockify are preserved for compatibility; the API base 
 `/Stockify/api/v1`.
 
 - **Backend**: raw Node.js (native `http` module, no Express) + `ws` for WebSocket + `mysql2` for
-  MySQL/MariaDB + `bcryptjs`. ES modules (`"type": "module"`). These three are the *only* runtime deps.
+  MySQL/MariaDB + `bcryptjs` + `nodemailer` (SMTP para el estado de cuenta de la quincena). ES modules
+  (`"type": "module"`). `nodemailer` se sumó para el envío de correo; el resto del stack sigue mínimo.
 - **Frontend**: plain HTML/CSS/JS SPA (no framework, no build step). ES modules loaded directly by the
   browser. Bootstrap, Chart.js, SweetAlert2, XLSX, jsPDF come from CDNs (see `frontend/index.html`).
 - The backend serves both the API and the static frontend from the same origin/port.
@@ -248,9 +249,14 @@ Beyond the CRUD routes, `/lotes` adds `GET /sucursal/:id/por-vencer?dias=30` (ex
 `/productos` adds `GET /codigo/:codigoProducto/sucursal/:sucursalId` — the sucursal-scoped lookup
 that should be preferred over the ambiguous `GET /codigo/:codigoProducto`.
 
-Facturación resources: `/clientes` (CRUD + `GET /sucursal/:id` + `GET /sucursal/:id/rut/:rut`),
-`/ventas` (`POST /`, `GET /sucursal/:id?desde=&hasta=&estado=`, `GET /:id`, `POST /:id/anular`) and
-`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`).
+Facturación resources: `/clientes` (CRUD + `GET /sucursal/:id` + `GET /sucursal/:id/rut/:rut`;
+cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /:id/limite`,
+`GET /:id/quincena?desde=&hasta=`, `POST /quincena/enviar`, `GET /correo/estado`),
+`/ventas` (`POST /`, `GET /sucursal/:id?desde=&hasta=&estado=`, `GET /turno/:turnoId`,
+`GET /cliente/:clienteId`, `GET /:id`, `POST /:id/anular`), `/turnos` (see Turnos below) and
+`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`). `/sucursales` adds the PIN
+management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3 active, value never
+returned) and carries `limiteCreditoDefault` in the CRUD (`PUT /sucursales/:id`).
 
 ## Facturación (módulo nuevo de Facturafy)
 
@@ -267,17 +273,55 @@ Enforced on both sides like `usa_lotes`: backend `assertUsaFacturacion` / `asser
 `oculto: true` disappear when the package is off) and the route guards (`requiere`).
 
 **Rol CAJERO.** Fourth role (`usuario.service.js` ROLES). Logs in to `#/facturacion/dashboard`
-(`auth.homeRoute`). The cajero sells (POS), creates clientes and anula ventas. The **administrador**
-does not sell: sees ventas realizadas, anula, sees estadísticas de facturación, and also creates
-clientes. Reportes/estadísticas de conteo and de facturación are **separate** sections, never mixed.
+(`auth.homeRoute`). The cajero sells (POS), busca clientes para facturar y anula ventas de su turno
+(con PIN). **No crea ni gestiona clientes**: eso es del **administrador**, que no vende (ve ventas,
+anula, estadísticas, clientes + cuenta corriente, turnos y configuración). Reportes/estadísticas de
+conteo and de facturación are **separate** sections, never mixed.
 
-**POS** (`pages/cajero/pos.js`): reuses `components/barcode.js` (`scanBarcode`, `manualSearch`,
-`findByCode`) to add products; cart is a `Map(productoId → {producto, cantidad})` so equal products
-unify into one row; default cliente is **consumidor final** (`cliente_id = NULL`), optionally a
-cliente by RUT (`/clientes/sucursal/:id/rut/:rut`, with quick-create). `POST /ventas` recalculates
+**POS** (`pages/cajero/pos.js`): usa `components/barcode.js` (`manualSearch`, `findByCode`) y el lector
+físico (listener de teclado) para agregar productos — el escaneo con cámara se quitó; cart is a
+`Map(productoId → {producto, cantidad})` so equal products unify into one row; default cliente is
+**consumidor final** (`cliente_id = NULL`), o un cliente **registrado** elegido con buscador
+(`/clientes/sucursal/:id`). Sin turno abierto el POS no opera. `POST /ventas` recalculates
 totals **server-side**, inserts `venta` + `venta_detalle` (snapshot of código/nombre/precio) and
 **discounts** `producto.cantidad_stock`. `POST /ventas/:id/anular` requires a `motivo` and **returns**
 the stock. Comprobante PDF via jsPDF.
+
+**Turnos de caja (`/turnos`).** El cajero, al entrar, debe **iniciar turno** antes de que el POS,
+Clientes y Ventas del turno se habiliten (gate en el front vía `core/turno.js`, y el POS manda
+`turnoId` en cada venta). Un turno es **uno por sucursal a la vez** (`turno.estado = 'ABIERTO'`,
+enforced en `turno.service.js#abrir` con `FOR UPDATE`): si ya hay uno abierto, el cajero se **suma**
+(`POST /:id/unirse`) en vez de abrir otro. `numero` 1=mañana/2=tarde/3=noche/4=otro. Varios cajeros
+comparten el turno (`turno_usuario`); el **responsable** es quien marcó el checkbox al abrir/sumarse
+(`turno.usuario_responsable_id`, puede quedar sin responsable). **Cerrar** (`POST /:id/cerrar`,
+responsable o admin — el route deriva `esAdmin` de `ctx.user.rol`) marca `CERRADO` y devuelve el
+reporte de **arqueo** (`GET /:id/reporte`: totales por forma de pago, ventas, anuladas,
+participantes). No hay fondo de caja ni conteo físico en la app (es procedimiento interno). Cada
+`venta` lleva `turno_id`; `GET /ventas/turno/:turnoId` lista las del turno para la pantalla del cajero.
+
+**Anulación por el cajero con PIN.** El cajero anula/elimina una venta de su turno ingresando
+**motivo + PIN de autorización**. Los PINes viven en la tabla `sucursal_pin` (hasta 3 activos por
+sucursal, con etiqueta; el máximo lo controla el servicio) y **los gestiona el administrador** en
+`#/admin/configuracion`. `venta.routes.js` exige el PIN cuando el rol no es admin
+(`requierePin = !esAdmin`) y valida contra cualquier PIN activo de la sucursal; el admin anula desde
+`#/admin/ventas` sin PIN. El valor del PIN **nunca** se devuelve en un GET (el listado trae id,
+etiqueta y activo).
+
+**Clientes, cuenta corriente y crédito.** El **alta/gestión de clientes es solo del administrador**
+(`#/admin/clientes`); el cajero solo busca un cliente registrado para facturarle. El **email es
+obligatorio** (se usa para el estado de cuenta). El documento usa dos radios (RUT/Cédula) sobre **un
+único** input; el número va a `cliente.rut` y el tipo a `cliente.tipo_documento`. `core/validacion.js`
+valida cédula y RUT uruguayos reales (dígito verificador). La **cuenta corriente** es un mayor
+(`cliente_movimiento`: `CARGO_VENTA` | `CARGO_MORA` | `PAGO`); el saldo = Σcargos − Σpagos
+(`src/modules/cliente/cuenta.js`). Una venta a crédito inserta un `CARGO_VENTA` dentro de la
+transacción y la anulación lo revierte. El **límite de crédito** por cliente (`cliente.limite_credito`,
+0 = sin límite) se copia al crearlo de `sucursal.limite_credito_default` (lo fija el admin); el POS
+rechaza una venta a crédito si `saldo + total > límite` (chequeo server-side en `venta.service.js`).
+El admin aplica **mora** (monto fijo o % del saldo) y registra **pagos**. **Cerrar la quincena** =
+`POST /clientes/quincena/enviar` arma el estado de cuenta (facturas del período + saldo a pagar) y lo
+manda por **email** (SMTP vía `nodemailer`, `src/core/mailer.js`, config `SMTP_*` en `.env`) a uno,
+varios o todos los clientes; **no** modifica el saldo. El administrador también ve
+`#/admin/turnos` (historial + arqueo + cerrar) y `#/admin/configuracion` (PINes + límite por defecto).
 
 **Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
 every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op

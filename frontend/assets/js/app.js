@@ -27,13 +27,18 @@ import { reporteConteo } from './pages/admin/reporteConteo.js';
 import { estadisticas } from './pages/admin/estadisticas.js';
 import { ventasPage } from './pages/admin/ventas.js';
 import { estadisticasFacturacion } from './pages/admin/estadisticasFacturacion.js';
+import { adminClientesPage } from './pages/admin/clientes.js';
+import { clienteCuentaPage } from './pages/admin/clienteCuenta.js';
+import { turnosAdminPage } from './pages/admin/turnos.js';
+import { configuracionFacturacionPage } from './pages/admin/configuracionFacturacion.js';
 // Empleado
 import { empleadoDashboard } from './pages/empleado/dashboard.js';
 import { conteoLibreEmpleado, conteoCategoriasEmpleado } from './pages/empleado/conteos.js';
 // Facturacion (cajero + compartido)
 import { cajeroDashboard } from './pages/cajero/dashboard.js';
 import { posPage } from './pages/cajero/pos.js';
-import { clientesPage } from './pages/shared/clientesPage.js';
+import { ventasTurnoPage } from './pages/cajero/ventasTurno.js';
+import { cerrarTurnoPage } from './pages/cajero/cerrarTurno.js';
 
 const SA = 'SUPERADMINISTRADOR', AD = 'ADMINISTRADOR', EM = 'EMPLEADO', CJ = 'CAJERO';
 
@@ -84,7 +89,10 @@ router.add('/admin/reporte-conteo/:id', page(reporteConteo), { role: AD, requier
 router.add('/admin/estadisticas', page(estadisticas), { role: AD, requiere: usaStock });
 // Facturacion (administrador): requieren el paquete usa_facturacion.
 router.add('/admin/ventas', page(ventasPage), { role: AD, requiere: usaFacturacion });
-router.add('/admin/clientes', page(() => clientesPage('Clientes')), { role: AD, requiere: usaFacturacion });
+router.add('/admin/clientes', page(adminClientesPage), { role: AD, requiere: usaFacturacion });
+router.add('/admin/cliente-cuenta/:id', page(clienteCuentaPage), { role: AD, requiere: usaFacturacion });
+router.add('/admin/turnos', page(turnosAdminPage), { role: AD, requiere: usaFacturacion });
+router.add('/admin/configuracion', page(configuracionFacturacionPage), { role: AD, requiere: usaFacturacion });
 router.add('/admin/estadisticas-facturacion', page(estadisticasFacturacion), { role: AD, requiere: usaFacturacion });
 
 // ---- Empleado ----
@@ -95,7 +103,8 @@ router.add('/empleado/conteo-categorias/:id', page(conteoCategoriasEmpleado), { 
 // ---- Cajero (facturacion) ----
 router.add('/facturacion/dashboard', page(cajeroDashboard), { role: CJ });
 router.add('/facturacion/pos', page(posPage), { role: CJ });
-router.add('/facturacion/clientes', page(() => clientesPage('Clientes')), { role: CJ });
+router.add('/facturacion/ventas-turno', page(ventasTurnoPage), { role: CJ });
+router.add('/facturacion/cerrar-turno', page(cerrarTurnoPage), { role: CJ });
 
 // ---- Raiz / no encontrado ----
 router.add('/', () => {

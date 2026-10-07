@@ -41,7 +41,9 @@ const NAV = {
     { section: 'Facturacion', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-receipt', label: 'Ventas realizadas', href: '#/admin/ventas', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-person-vcard', label: 'Clientes', href: '#/admin/clientes', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-clock-history', label: 'Turnos', href: '#/admin/turnos', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-bar-chart-line', label: 'Estadisticas de facturacion', href: '#/admin/estadisticas-facturacion', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-sliders', label: 'Configuracion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true },
   ],
   EMPLEADO: [
     { section: 'General' },
@@ -52,7 +54,9 @@ const NAV = {
     { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/facturacion/dashboard' },
     { section: 'Facturacion' },
     { icon: 'bi-cart-plus', label: 'Punto de venta', href: '#/facturacion/pos' },
-    { icon: 'bi-person-vcard', label: 'Clientes', href: '#/facturacion/clientes' },
+    { section: 'Turno' },
+    { icon: 'bi-receipt', label: 'Ventas del turno', href: '#/facturacion/ventas-turno' },
+    { icon: 'bi-door-closed', label: 'Cerrar turno', href: '#/facturacion/cerrar-turno' },
   ],
 };
 

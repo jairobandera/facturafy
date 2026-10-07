@@ -2,6 +2,7 @@ import { query } from '../../config/db.js';
 
 const SELECT = `
   SELECT v.id, v.fecha_hora AS fechaHora, v.sucursal_id AS sucursalId,
+         v.turno_id AS turnoId,
          v.usuario_id AS usuarioId, v.cliente_id AS clienteId,
          v.consumidor_final AS consumidorFinal, v.subtotal, v.descuento, v.total,
          v.forma_pago AS formaPago, v.estado, v.motivo_anulacion AS motivoAnulacion,
@@ -10,6 +11,7 @@ const SELECT = `
          v.cfe_estado AS cfeEstado, v.cfe_uuid AS cfeUuid, v.cfe_cae AS cfeCae,
          v.cfe_qr_url AS cfeQrUrl, v.cfe_hash AS cfeHash,
          c.razon_social AS clienteRazonSocial, c.rut AS clienteRut,
+         c.tipo_documento AS clienteTipoDocumento,
          u.nombre AS usuarioNombre, u.apellido AS usuarioApellido
   FROM venta v
   LEFT JOIN cliente c ON c.id = v.cliente_id
@@ -64,5 +66,13 @@ export const ventaRepository = {
     if (hasta) { where += ' AND v.fecha_hora <= ?'; params.push(`${hasta} 23:59:59`); }
     if (estado) { where += ' AND v.estado = ?'; params.push(estado); }
     return hydrate(await query(`${SELECT} ${where} ORDER BY v.fecha_hora DESC, v.id DESC`, params));
+  },
+  // Ventas de un turno (las controla/anula el cajero durante su turno).
+  async findByTurno(turnoId) {
+    return hydrate(await query(`${SELECT} WHERE v.turno_id = ? ORDER BY v.fecha_hora DESC, v.id DESC`, [turnoId]));
+  },
+  // Ventas de un cliente (historial para la cuenta corriente del administrador).
+  async findByCliente(clienteId) {
+    return hydrate(await query(`${SELECT} WHERE v.cliente_id = ? ORDER BY v.fecha_hora DESC, v.id DESC`, [clienteId]));
   },
 };

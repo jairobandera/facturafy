@@ -30,17 +30,29 @@ async function main() {
 INSERT INTO empresa (id, nombre, rut, direccion, telefono) VALUES
   (1, ${q('Distribuidora Demo S.A.')}, ${q('210000000012')}, ${q('Av. Siempre Viva 742')}, ${q('099111222')});
 
--- usa_lotes: Pocitos queda sin el apartado de Lotes para mostrar la opcion del superadmin.
-INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes) VALUES
-  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1),
-  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0);
+-- Centro: paquete COMPLETO (stock + facturacion) y limite de credito por defecto 5000.
+-- Pocitos: solo control de stock y sin Lotes, para mostrar las opciones del superadmin.
+INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, limite_credito_default) VALUES
+  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1, 1, 1, 5000),
+  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0, 1, 0, 0);
+
+-- PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
+INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES
+  (1, 1, ${q('1234')}, ${q('Supervisor')}),
+  (2, 1, ${q('9999')}, ${q('Encargado')});
 
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
+-- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
   (1, ${q('Sofia')},  ${q('Perez')},     ${q('superadmin')}, ${q(pass)}, ${q('SUPERADMINISTRADOR')}, 1, 0),
   (2, ${q('Martin')}, ${q('Gomez')},     ${q('admin')},      ${q(pass)}, ${q('ADMINISTRADOR')},      1, 0),
   (3, ${q('Lucia')},  ${q('Fernandez')}, ${q('empleado')},   ${q(pass)}, ${q('EMPLEADO')},           1, 0),
-  (4, ${q('Diego')},  ${q('Rodriguez')}, ${q('empleado2')},  ${q(pass)}, ${q('EMPLEADO')},           1, 1);
+  (4, ${q('Diego')},  ${q('Rodriguez')}, ${q('empleado2')},  ${q(pass)}, ${q('EMPLEADO')},           1, 1),
+  (5, ${q('Carla')},  ${q('Lopez')},     ${q('cajero')},     ${q(pass)}, ${q('CAJERO')},             1, 0);
+
+-- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
+INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES
+  (1, ${q('210000000019')}, ${q('Comercio del Este S.R.L.')}, ${q('El Este')}, ${q('Av. Italia 3000')}, ${q('099777888')}, ${q('ventas@eleste.com')}, ${q('RUT')}, 5000, 1);
 
 INSERT INTO categoria (id, nombre, descripcion, codigo_categoria, sucursal_id) VALUES
   (1, ${q('Bebidas')}, ${q('Bebidas y refrescos')}, ${q('BEB')}, 1),

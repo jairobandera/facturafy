@@ -1,15 +1,18 @@
-// Punto de venta (POS). Pensado para ser lo mas directo posible: escanear o buscar
-// un producto, poner la cantidad, y facturar. Los productos iguales se unifican en
-// el carrito. Por defecto la venta es a consumidor final; se puede asignar un cliente
-// por RUT. Al facturar se registra la venta y el backend descuenta el stock.
+// Punto de venta (POS). Pensado para un lector de codigo de barra FISICO (no camara):
+// se pasa el producto por el lector, se pone la cantidad y se factura. Los productos
+// iguales se unifican en el carrito. Por defecto la venta es a consumidor final; se
+// puede asignar un cliente (por RUT/CI, eligiendolo de la lista o creando uno nuevo).
+// Las ventas a credito exigen un cliente registrado. Toda venta se registra dentro
+// del turno de caja abierto (sin turno, el POS no opera).
 import { h, clear } from '../../core/dom.js';
 import { api } from '../../core/api.js';
 import { ui, fmt } from '../../core/ui.js';
 import { renderShell } from '../../core/layout.js';
+import { router } from '../../core/router.js';
 import { pageHeader, spinner } from '../../components/page.js';
-import { scanBarcode, manualSearch, findByCode } from '../../components/barcode.js';
-import { formModal } from '../../components/formModal.js';
+import { manualSearch, findByCode } from '../../components/barcode.js';
 import { sucursalActiva } from '../../core/sucursal.js';
+import { cargarTurnoActivo, soyMiembro } from '../../core/turno.js';
 import { resolveUsuarioId } from '../shared/session.js';
 import { onCleanup } from '../../core/lifecycle.js';
 
@@ -18,14 +21,19 @@ const Swal = window.Swal;
 export async function posPage() {
   const content = renderShell('Punto de venta');
   const sucursalId = sucursalActiva();
-  const loading = spinner('Cargando productos...');
+  const loading = spinner('Cargando punto de venta...');
   content.append(loading);
 
   const productosById = new Map();
   let usuarioId = null;
+  let turno = null;
   try {
-    [usuarioId] = await Promise.all([resolveUsuarioId()]);
-    const productos = await api.get(`/productos/sucursal/${sucursalId}/activos`);
+    let productos;
+    [usuarioId, turno, productos] = await Promise.all([
+      resolveUsuarioId(),
+      cargarTurnoActivo(sucursalId),
+      api.get(`/productos/sucursal/${sucursalId}/activos`),
+    ]);
     for (const p of productos) productosById.set(p.id, p);
   } catch (err) {
     loading.remove();
@@ -34,26 +42,24 @@ export async function posPage() {
   }
   loading.remove();
 
+  // Gate de turno: sin turno abierto del que el cajero sea parte, no se puede facturar.
+  if (!turno || !soyMiembro(turno, usuarioId)) {
+    ui.info('Turno no iniciado', 'Tenés que iniciar o unirte a un turno de caja antes de facturar.');
+    router.navigate('/facturacion/dashboard');
+    return;
+  }
+
   // Estado del POS.
   const carrito = new Map(); // productoId -> { producto, cantidad }
   let cliente = null;        // null = consumidor final
   let formaPago = 'CONTADO';
 
-  content.append(pageHeader('Punto de venta', 'Escaneá o buscá un producto para agregarlo.'));
+  content.append(pageHeader('Punto de venta', `Turno ${turno.numeroLabel} · pasá un producto por el lector o buscalo.`));
 
-  // ---- Botones de alta ----
-  const scanBtn = h('button', { class: 'btn btn-primary btn-lg flex-fill py-3 d-flex align-items-center justify-content-center gap-2' },
-    [h('i', { class: 'bi bi-upc-scan', style: { fontSize: '1.4rem' } }), 'Escanear producto']);
-  scanBtn.addEventListener('click', async () => {
-    const code = await scanBarcode();
-    if (!code) return;
-    const producto = findByCode([...productosById.values()], code);
-    if (!producto) { ui.error(`No se encontró ningún producto con el código "${code}".`); return; }
-    await agregarAlCarrito(producto);
-  });
-
-  const manualBtn = h('button', { class: 'btn btn-outline-secondary btn-lg flex-fill py-3 d-flex align-items-center justify-content-center gap-2' },
-    [h('i', { class: 'bi bi-search', style: { fontSize: '1.2rem' } }), 'Búsqueda manual']);
+  // ---- Boton de alta (solo busqueda manual: el escaneo con camara se quito, se usa
+  //      el lector fisico que ya funciona via el listener de teclado de abajo) ----
+  const manualBtn = h('button', { class: 'btn btn-primary btn-lg w-100 py-3 d-flex align-items-center justify-content-center gap-2' },
+    [h('i', { class: 'bi bi-search', style: { fontSize: '1.3rem' } }), 'Buscar producto']);
   manualBtn.addEventListener('click', async () => {
     const producto = await manualSearch([...productosById.values()]);
     if (!producto) return;
@@ -61,7 +67,10 @@ export async function posPage() {
   });
 
   const addCard = h('div', { class: 'sk-card p-3 mb-3' }, [
-    h('div', { class: 'd-flex flex-column flex-sm-row gap-2' }, [scanBtn, manualBtn]),
+    manualBtn,
+    h('div', { class: 'text-muted small mt-2 text-center' }, [
+      h('i', { class: 'bi bi-upc-scan me-1' }), 'Pasá el producto por el lector para agregarlo al instante.',
+    ]),
   ]);
 
   // ---- Carrito ----
@@ -104,7 +113,7 @@ export async function posPage() {
     facturarBtn,
   ]);
 
-  // Cliente arriba a la izquierda y totales arriba a la derecha; abajo, escaneo y carrito.
+  // Cliente arriba a la izquierda y totales arriba a la derecha; abajo, busqueda y carrito.
   content.append(
     h('div', { class: 'row g-3 mb-3' }, [
       h('div', { class: 'col-12 col-lg-6' }, clienteBox),
@@ -120,12 +129,10 @@ export async function posPage() {
   // Lector de codigo de barra FISICO: funciona como un teclado que "tipea" el codigo
   // muy rapido y termina con Enter. Lo capturamos a nivel documento para que, estando
   // en el POS, pasar un producto por el lector lo busque y abra el modal de cantidad
-  // sin tener que apretar antes "Escanear producto".
+  // sin tener que apretar antes ningun boton.
   let bufferScan = '';
   let ultimaTecla = 0;
   async function onKeydownScanner(e) {
-    // Si el foco esta en un campo o hay un popup abierto (cantidad, RUT, busqueda,
-    // nuevo cliente, confirmacion), no interceptamos: ese input maneja el escaneo.
     const ae = document.activeElement;
     const enCampo = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable);
     if (enCampo) return;
@@ -158,11 +165,8 @@ export async function posPage() {
     const stockDisponible = Number(producto.cantidadStock);
     const cantidad = await askCantidadVenta(producto, existente?.cantidad);
     if (cantidad == null) return;
-    // Unifica productos iguales: reemplaza la cantidad del renglon existente.
     carrito.set(producto.id, { producto, cantidad });
-    if (cantidad > stockDisponible) {
-      ui.toast('Ojo: la cantidad supera el stock disponible.', 'warning');
-    }
+    if (cantidad > stockDisponible) ui.toast('Ojo: la cantidad supera el stock disponible.', 'warning');
     renderCarrito();
   }
 
@@ -175,7 +179,7 @@ export async function posPage() {
     clear(tbody);
     if (carrito.size === 0) {
       tbody.append(h('tr', {}, [h('td', { colspan: 5, class: 'text-center text-muted py-4' },
-        'El carrito está vacío. Escaneá o buscá un producto.')]));
+        'El carrito está vacío. Pasá un producto por el lector o buscalo.')]));
     } else {
       for (const { producto, cantidad } of carrito.values()) {
         const sub = Number(producto.precio) * cantidad;
@@ -228,7 +232,7 @@ export async function posPage() {
       detalle = h('div', { class: 'd-flex align-items-center justify-content-between' }, [
         h('div', {}, [
           h('div', { class: 'fw-semibold' }, cliente.razonSocial || cliente.nombreFantasia || 'Cliente'),
-          h('div', { class: 'text-muted small' }, cliente.rut ? `RUT: ${cliente.rut}` : 'Sin RUT'),
+          h('div', { class: 'text-muted small' }, cliente.rut ? `${cliente.tipoDocumento || 'RUT'}: ${cliente.rut}` : 'Sin documento'),
         ]),
         h('button', { class: 'btn btn-sm btn-outline-secondary', onClick: () => { cliente = null; renderCliente(); } },
           [h('i', { class: 'bi bi-x-lg me-1' }), 'Consumidor final']),
@@ -237,92 +241,45 @@ export async function posPage() {
       detalle = h('div', {}, [
         h('div', { class: 'text-muted mb-2' }, 'Consumidor final (sin datos).'),
         h('div', { class: 'd-flex flex-wrap gap-2' }, [
-          h('button', { class: 'btn btn-sm btn-outline-primary', onClick: ingresarPorRut },
-            [h('i', { class: 'bi bi-upc me-1' }), 'Ingresar RUT']),
-          h('button', { class: 'btn btn-sm btn-outline-secondary', onClick: elegirCliente },
+          h('button', { class: 'btn btn-sm btn-outline-primary', onClick: elegirCliente },
             [h('i', { class: 'bi bi-people me-1' }), 'Elegir cliente']),
-          h('button', { class: 'btn btn-sm btn-outline-success', onClick: () => nuevoCliente() },
-            [h('i', { class: 'bi bi-person-plus me-1' }), 'Nuevo cliente']),
         ]),
+        h('div', { class: 'text-muted small mt-2' }, 'Los clientes nuevos los da de alta el administrador.'),
       ]);
     }
     clienteBox.append(titulo, detalle);
   }
 
-  async function ingresarPorRut() {
-    const { value: rut, isConfirmed } = await Swal.fire({
-      title: 'RUT del cliente', input: 'text', inputPlaceholder: 'Ej: 216000000013',
-      showCancelButton: true, confirmButtonText: 'Buscar', cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#2563eb', cancelButtonColor: '#64748b',
-      inputValidator: (v) => (!v || !v.trim()) ? 'Ingresá un RUT.' : undefined,
-    });
-    if (!isConfirmed) return;
-    const limpio = rut.trim();
-    try {
-      cliente = await api.get(`/clientes/sucursal/${sucursalId}/rut/${encodeURIComponent(limpio)}`);
-      renderCliente();
-    } catch (err) {
-      if (err.status === 404) {
-        const crear = await ui.confirm(`No existe un cliente con RUT ${limpio}. ¿Querés crearlo?`,
-          { confirmText: 'Sí, crear', danger: false });
-        if (crear) await nuevoCliente({ rut: limpio });
-      } else {
-        ui.error(err.message);
-      }
-    }
-  }
-
+  // Modal con barra de busqueda: filtra la lista de clientes mientras se escribe,
+  // asi no queda una lista interminable cuando hay muchos clientes.
   async function elegirCliente() {
     let clientes;
     try { clientes = await api.get(`/clientes/sucursal/${sucursalId}`); }
     catch (err) { ui.error(err.message); return; }
-    if (!clientes.length) { ui.info('Sin clientes', 'Todavía no hay clientes cargados en esta sucursal.'); return; }
-    const html = '<div class="list-group text-start">' + clientes.map((c, i) =>
-      `<button type="button" class="list-group-item list-group-item-action" data-i="${i}">
-         <div class="fw-semibold">${esc(c.razonSocial || c.nombreFantasia || 'Cliente')}</div>
-         <small class="text-muted">${esc(c.rut ? 'RUT: ' + c.rut : 'Sin RUT')}</small>
-       </button>`).join('') + '</div>';
-    let elegido = null;
-    await Swal.fire({
-      title: 'Elegí el cliente', html, showConfirmButton: false, showCancelButton: true,
-      cancelButtonText: 'Cancelar', cancelButtonColor: '#64748b',
-      didOpen: () => {
-        document.querySelectorAll('#swal2-html-container .list-group-item-action').forEach((btn) => {
-          btn.addEventListener('click', () => { elegido = clientes[Number(btn.dataset.i)]; Swal.close(); });
-        });
-      },
-    });
+    if (!clientes.length) {
+      ui.info('Sin clientes', 'Todavía no hay clientes en esta sucursal. El administrador los da de alta.');
+      return;
+    }
+    const elegido = await pickClienteBuscable(clientes);
     if (elegido) { cliente = elegido; renderCliente(); }
-  }
-
-  async function nuevoCliente(prefill = {}) {
-    const values = await formModal({
-      title: 'Nuevo cliente',
-      fields: [
-        { name: 'razonSocial', label: 'Razón social', required: true, colClass: 'col-md-6' },
-        { name: 'rut', label: 'RUT', value: prefill.rut, colClass: 'col-md-6' },
-        { name: 'nombreFantasia', label: 'Nombre fantasía', colClass: 'col-md-6' },
-        { name: 'telefono', label: 'Teléfono', colClass: 'col-md-6' },
-        { name: 'direccion', label: 'Dirección', colClass: 'col-md-6' },
-        { name: 'email', label: 'Email', type: 'email', colClass: 'col-md-6' },
-      ],
-    });
-    if (!values) return;
-    try {
-      cliente = await api.post('/clientes', {
-        razonSocial: values.razonSocial, rut: values.rut || null,
-        nombreFantasia: values.nombreFantasia || null, telefono: values.telefono || null,
-        direccion: values.direccion || null, email: values.email || null,
-        tipoDocumento: 'RUT', sucursalId,
-      });
-      ui.success('Cliente creado.');
-      renderCliente();
-    } catch (err) { ui.error(err.message); }
   }
 
   // -------------------- Facturar --------------------
   async function facturar() {
     if (carrito.size === 0) return;
+
+    // A credito es obligatorio un cliente registrado: si no hay, se ofrece elegirlo.
+    if (formaPago === 'CREDITO' && !cliente) {
+      const r = await Swal.fire({
+        icon: 'info', title: 'Venta a crédito',
+        text: 'Una venta a crédito necesita un cliente registrado.',
+        showCancelButton: true, confirmButtonText: 'Elegir cliente', cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#2563eb', cancelButtonColor: '#64748b',
+      });
+      if (r.isConfirmed) await elegirCliente();
+      if (!cliente) return; // sigue sin cliente: no se puede facturar a credito
+    }
+
     const total = totalVenta();
     const quien = cliente ? (cliente.razonSocial || cliente.nombreFantasia) : 'Consumidor final';
     const ok = await ui.confirm(
@@ -333,11 +290,10 @@ export async function posPage() {
     ui.loading('Registrando venta...');
     try {
       const venta = await api.post('/ventas', {
-        sucursalId, usuarioId, clienteId: cliente?.id ?? null, formaPago,
+        sucursalId, turnoId: turno.id, usuarioId, clienteId: cliente?.id ?? null, formaPago,
         items: [...carrito.values()].map(({ producto, cantidad }) => ({ productoId: producto.id, cantidad })),
       });
       ui.close();
-      // Refresca el stock local con el que ya descontó el backend.
       for (const { producto, cantidad } of carrito.values()) {
         const p = productosById.get(producto.id);
         if (p) p.cantidadStock = Number(p.cantidadStock) - cantidad;
@@ -364,6 +320,50 @@ export async function posPage() {
     });
     if (res.isConfirmed) generarComprobantePDF(venta);
   }
+}
+
+/**
+ * Modal de seleccion de cliente con barra de busqueda. Filtra por razon social,
+ * nombre fantasia, RUT/CI, telefono o email mientras se escribe. Resuelve el
+ * cliente elegido o null.
+ */
+function pickClienteBuscable(clientes) {
+  const fila = (c, i) => `
+    <button type="button" class="list-group-item list-group-item-action" data-i="${i}">
+      <div class="fw-semibold">${esc(c.razonSocial || c.nombreFantasia || 'Cliente')}</div>
+      <small class="text-muted">${esc(c.rut ? (c.tipoDocumento || 'RUT') + ': ' + c.rut : 'Sin documento')}${c.telefono ? ' · ' + esc(c.telefono) : ''}</small>
+    </button>`;
+  const coincide = (c, t) => [c.razonSocial, c.nombreFantasia, c.rut, c.telefono, c.email]
+    .some((v) => String(v || '').toLowerCase().includes(t));
+
+  return new Promise((resolve) => {
+    let elegido = null;
+    Swal.fire({
+      title: 'Elegí el cliente',
+      html: `
+        <input id="sk-cli-buscar" class="form-control mb-2" placeholder="Buscar por nombre, RUT/CI, teléfono..." autocomplete="off" />
+        <div id="sk-cli-lista" class="list-group text-start" style="max-height:320px;overflow-y:auto"></div>`,
+      showConfirmButton: false, showCancelButton: true, cancelButtonText: 'Cancelar', cancelButtonColor: '#64748b',
+      didOpen: () => {
+        const buscar = document.getElementById('sk-cli-buscar');
+        const lista = document.getElementById('sk-cli-lista');
+        const pintar = () => {
+          const t = buscar.value.trim().toLowerCase();
+          const filtrados = t ? clientes.filter((c) => coincide(c, t)) : clientes;
+          lista.innerHTML = filtrados.length
+            ? filtrados.map((c) => fila(c, clientes.indexOf(c))).join('')
+            : '<div class="list-group-item text-muted small">Sin resultados.</div>';
+          lista.querySelectorAll('.list-group-item-action').forEach((btn) => {
+            btn.addEventListener('click', () => { elegido = clientes[Number(btn.dataset.i)]; Swal.close(); });
+          });
+        };
+        buscar.addEventListener('input', pintar);
+        pintar();
+        buscar.focus();
+      },
+      willClose: () => resolve(elegido),
+    });
+  });
 }
 
 /** Popup simple de cantidad a vender (muestra precio y stock disponible). */
@@ -405,7 +405,7 @@ function generarComprobantePDF(venta) {
   doc.text(`Venta #${venta.id}`, 14, 28);
   doc.text(`Fecha: ${fmt.dateTime(venta.fechaHora)}`, 14, 34);
   const quien = venta.consumidorFinal ? 'Consumidor final'
-    : `${venta.clienteRazonSocial || ''}${venta.clienteRut ? ' (RUT ' + venta.clienteRut + ')' : ''}`;
+    : `${venta.clienteRazonSocial || ''}${venta.clienteRut ? ' (' + (venta.clienteTipoDocumento || 'RUT') + ' ' + venta.clienteRut + ')' : ''}`;
   doc.text(`Cliente: ${quien}`, 14, 40);
   doc.text(`Forma de pago: ${venta.formaPago === 'CREDITO' ? 'Crédito' : 'Contado'}`, 14, 46);
 

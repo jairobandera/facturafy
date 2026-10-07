@@ -41,6 +41,8 @@ async function main() {
   console.log('     - empleado     (EMPLEADO, Sucursal Centro)');
   console.log('     - empleado2    (EMPLEADO, cuenta en cualquier sucursal)');
   console.log('     - cajero       (CAJERO, Sucursal Centro, facturacion)');
+  console.log('   PINes de anulacion de Sucursal Centro: 1234 / 9999');
+  console.log('   Limite de credito por defecto (cuentas nuevas) de Centro: 5000');
 }
 
 async function seed(conn) {
@@ -53,9 +55,10 @@ async function seed(conn) {
 
   // Sucursales
   // Centro: paquete COMPLETO (control de stock + facturacion) para probar todo.
+  // limite_credito_default 5000: limite de credito por defecto de cuentas nuevas.
   const [suc1] = await conn.query(
-    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion) VALUES (?,?,?,?,1,1)`,
-    ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId]
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion, limite_credito_default) VALUES (?,?,?,?,1,1,?)`,
+    ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId, 5000]
   );
   const sucursalId = suc1.insertId;
   // Pocitos queda SOLO con control de stock y sin el apartado de Lotes, para mostrar
@@ -65,6 +68,12 @@ async function seed(conn) {
     ['Sucursal Pocitos', 'Av. Brasil 2500', '099555666', empresaId]
   );
   const sucursal2Id = suc2.insertId;
+
+  // PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
+  await conn.query(
+    `INSERT INTO sucursal_pin (sucursal_id, pin, etiqueta) VALUES (?,?,?), (?,?,?)`,
+    [sucursalId, '1234', 'Supervisor', sucursalId, '9999', 'Encargado']
+  );
 
   // Usuarios
   const pass = await hashPassword('12345');
@@ -82,11 +91,11 @@ async function seed(conn) {
     ]
   );
 
-  // Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT.
+  // Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
   await conn.query(
-    `INSERT INTO cliente (rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, sucursal_id)
-     VALUES (?,?,?,?,?,?,?,?)`,
-    ['216000000013', 'Comercio del Este S.R.L.', 'El Este', 'Av. Italia 3000', '099777888', 'ventas@eleste.com', 'RUT', sucursalId]
+    `INSERT INTO cliente (rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    ['210000000019', 'Comercio del Este S.R.L.', 'El Este', 'Av. Italia 3000', '099777888', 'ventas@eleste.com', 'RUT', 5000, sucursalId]
   );
 
   // Categorias

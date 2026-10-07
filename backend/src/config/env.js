@@ -59,4 +59,15 @@ export const config = {
     rutEmisor: process.env.CFE_RUT_EMISOR || '',
     certPath: process.env.CFE_CERT_PATH || '',
   },
+  // Envio de correo (SMTP) para mandar el estado de cuenta de la quincena a los
+  // clientes. Si SMTP_HOST esta vacio, el envio se considera "no configurado" y la
+  // API responde un error claro en vez de intentar conectar.
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
+  },
 };
