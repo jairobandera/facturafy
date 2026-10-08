@@ -145,6 +145,23 @@ export const cuentaService = {
     return this.resumen(clienteId);
   },
 
+  /**
+   * Cancela (elimina) un movimiento manual de la cuenta: solo CARGO_MORA o PAGO
+   * (por un error al cargarlo). Las ventas a credito se revierten anulando la venta.
+   */
+  async cancelarMovimiento(clienteId, movId) {
+    const rows = await query(
+      `SELECT tipo FROM cliente_movimiento WHERE id = ? AND cliente_id = ?`,
+      [movId, clienteId]
+    );
+    if (!rows.length) throw notFound(`Movimiento no encontrado con id: ${movId}`);
+    if (!['CARGO_MORA', 'PAGO'].includes(rows[0].tipo)) {
+      throw badRequest('Solo se pueden cancelar cargos de mora o pagos. Para revertir una venta a crédito, anulá la venta.');
+    }
+    await query(`DELETE FROM cliente_movimiento WHERE id = ? AND cliente_id = ?`, [movId, clienteId]);
+    return this.resumen(clienteId);
+  },
+
   /** Fija el limite de credito del cliente (0 = sin limite). */
   async setLimite(clienteId, limite) {
     const l = Number(limite);

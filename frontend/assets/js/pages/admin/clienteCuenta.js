@@ -108,6 +108,10 @@ export async function clienteCuentaPage(ctx) {
         ],
         rows: resumen.movimientos.slice().reverse(),
         searchKeys: ['descripcion', 'tipo'],
+        actions: [
+          { icon: 'bi-x-circle', title: 'Cancelar (mora o pago)', className: 'btn-outline-danger',
+            show: (m) => m.tipo === 'CARGO_MORA' || m.tipo === 'PAGO', onClick: cancelarMovimiento },
+        ],
       })
       : h('div', { class: 'sk-card p-4 text-center text-muted' }, 'Sin movimientos en la cuenta corriente.');
 
@@ -162,6 +166,19 @@ export async function clienteCuentaPage(ctx) {
     try {
       await api.post(`/clientes/${clienteId}/mora`, { modo: v.modo, valor: Number(v.valor), nota: v.nota || null, usuarioId });
       ui.close(); ui.success('Cargo por mora aplicado.');
+      await recargar();
+    } catch (err) { ui.close(); ui.error(err.message); }
+  }
+
+  async function cancelarMovimiento(m) {
+    const etiqueta = m.tipo === 'CARGO_MORA' ? 'cargo por mora' : 'pago';
+    const ok = await ui.confirm(`¿Cancelar este ${etiqueta} de ${fmt.money(m.monto)}? Se quitará de la cuenta.`,
+      { title: 'Cancelar movimiento', confirmText: 'Sí, cancelar' });
+    if (!ok) return;
+    ui.loading('Cancelando...');
+    try {
+      await api.del(`/clientes/${clienteId}/movimientos/${m.id}`);
+      ui.close(); ui.success('Movimiento cancelado.');
       await recargar();
     } catch (err) { ui.close(); ui.error(err.message); }
   }

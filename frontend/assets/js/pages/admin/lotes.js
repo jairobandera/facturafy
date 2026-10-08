@@ -36,6 +36,10 @@ export function gestionarLotes(ctx) {
   let productos = [];
   let current = [];
   let pageRef;
+  // Si la sucursal elegida no tiene habilitado el apartado de Lotes, no rompemos la
+  // pagina: mostramos un aviso y dejamos el selector para poder cambiar de sucursal.
+  let lotesDeshabilitado = false;
+  const bannerLotes = h('div', { class: 'alert alert-warning py-2 px-3 mb-0 mt-2 w-100 d-none' });
 
   // El filtro inicial puede venir del dashboard (#/admin/gestionar-lotes?filtro=porVencer).
   const filtroInicial = ctx?.query?.filtro;
@@ -148,7 +152,15 @@ export function gestionarLotes(ctx) {
       const url = sucursalId
         ? `/lotes/sucursal/${sucursalId}${state.filtro === 'inactivos' ? '' : '/activos'}`
         : '/lotes';
-      const lotes = await api.get(url);
+      let lotes;
+      try {
+        lotes = await api.get(url);
+        lotesDeshabilitado = false;
+      } catch (err) {
+        // 403 = la sucursal no tiene habilitado el apartado de Lotes: no es un error fatal.
+        if (err.status === 403) { lotesDeshabilitado = true; current = []; return []; }
+        throw err;
+      }
       // Se enriquece cada lote con datos del producto para mostrarlos y poder buscarlos.
       current = lotes
         .map((l) => {
@@ -214,10 +226,25 @@ export function gestionarLotes(ctx) {
     create: (dto) => api.post('/lotes', dto),
     update: (id, dto) => api.put(`/lotes/${id}`, dto),
     remove: (row) => api.del(`/lotes/${row.id}`),
-    toolbar: h('div', { class: 'd-flex flex-wrap gap-2 align-items-center' }, [selectorSucursal, filtroSelect, exportBtn]),
+    toolbar: h('div', { class: 'w-100' }, [
+      h('div', { class: 'd-flex flex-wrap gap-2 align-items-center' }, [selectorSucursal, filtroSelect, exportBtn]),
+      bannerLotes,
+    ]),
     footer: resumenSection,
     // El resumen depende del stock de los productos, que cambia con cada alta/baja de lote.
-    afterRefresh: () => { if (sucursalId) refreshResumen(); },
+    afterRefresh: () => {
+      // Aviso y comportamiento cuando la sucursal no tiene Lotes habilitado.
+      bannerLotes.classList.toggle('d-none', !lotesDeshabilitado);
+      if (lotesDeshabilitado) {
+        bannerLotes.innerHTML = '';
+        bannerLotes.append(h('i', { class: 'bi bi-lock-fill me-1' }),
+          'Esta sucursal no tiene habilitado el apartado de Lotes. Elegí otra sucursal arriba.');
+        resumenSection.classList.add('d-none');
+        return;
+      }
+      resumenSection.classList.remove('d-none');
+      if (sucursalId) refreshResumen();
+    },
   });
 
   return pageRef;

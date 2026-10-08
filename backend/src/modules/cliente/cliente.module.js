@@ -110,4 +110,9 @@ export const clienteRoutes = clienteCrud.buildRoutes((routes) => {
     const { limiteCredito } = ctx.body || {};
     sendJson(res, 200, await cuentaService.setLimite(ctx.params.id, limiteCredito));
   });
+
+  // Cancela un movimiento de mora o un pago (por un error al cargarlo).
+  routes.delete('/:id/movimientos/:movId', async (ctx, res) => {
+    sendJson(res, 200, await cuentaService.cancelarMovimiento(ctx.params.id, ctx.params.movId));
+  });
 });
