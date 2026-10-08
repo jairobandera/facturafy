@@ -8,8 +8,7 @@ import { usaLotes, usaStock, usaFacturacion } from './sucursal.js';
 // muestran en gris con candado, como hasta ahora.
 const NAV = {
   SUPERADMINISTRADOR: [
-    { section: 'General' },
-    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/superadmin/dashboard' },
+    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/superadmin/dashboard', standalone: true },
     { section: 'Empresas' },
     { icon: 'bi-building', label: 'Ver empresas', href: '#/superadmin/ver-empresas' },
     { icon: 'bi-plus-circle', label: 'Crear empresa', href: '#/superadmin/crear-empresa' },
@@ -23,8 +22,7 @@ const NAV = {
     { icon: 'bi-sliders', label: 'Configuraciones', href: '#/superadmin/configuraciones' },
   ],
   ADMINISTRADOR: [
-    { section: 'General' },
-    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/admin/dashboard' },
+    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/admin/dashboard', standalone: true },
     { section: 'Inventario' },
     { icon: 'bi-tags', label: 'Categorias', href: '#/admin/gestionar-categorias' },
     { icon: 'bi-box-seam', label: 'Productos', href: '#/admin/gestionar-productos' },
@@ -37,21 +35,22 @@ const NAV = {
     { icon: 'bi-clipboard-data', label: 'Conteos finalizados', href: '#/admin/conteos-finalizados', requiere: usaStock, oculto: true },
     { icon: 'bi-people', label: 'Empleados', href: '#/admin/gestionar-empleados', requiere: usaStock, oculto: true },
     { icon: 'bi-graph-up', label: 'Estadisticas de conteos', href: '#/admin/estadisticas', requiere: usaStock, oculto: true },
+    // Clientes (paquete usa_facturacion) en su propio apartado
+    { section: 'Clientes', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-person-vcard', label: 'Clientes', href: '#/admin/clientes', requiere: usaFacturacion, oculto: true },
     // Facturacion (paquete usa_facturacion)
     { section: 'Facturacion', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-receipt', label: 'Ventas realizadas', href: '#/admin/ventas', requiere: usaFacturacion, oculto: true },
-    { icon: 'bi-person-vcard', label: 'Clientes', href: '#/admin/clientes', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-clock-history', label: 'Turnos', href: '#/admin/turnos', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-bar-chart-line', label: 'Estadisticas de facturacion', href: '#/admin/estadisticas-facturacion', requiere: usaFacturacion, oculto: true },
-    { icon: 'bi-sliders', label: 'Configuracion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true },
+    // Configuracion queda suelta (sin apartado)
+    { icon: 'bi-sliders', label: 'Configuracion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true, standalone: true },
   ],
   EMPLEADO: [
-    { section: 'General' },
-    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/empleado/dashboard' },
+    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/empleado/dashboard', standalone: true },
   ],
   CAJERO: [
-    { section: 'General' },
-    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/facturacion/dashboard' },
+    { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/facturacion/dashboard', standalone: true },
     { section: 'Facturacion' },
     { icon: 'bi-cart-plus', label: 'Punto de venta', href: '#/facturacion/pos' },
     { section: 'Turno' },
@@ -59,6 +58,15 @@ const NAV = {
     { icon: 'bi-door-closed', label: 'Cerrar turno', href: '#/facturacion/cerrar-turno' },
   ],
 };
+
+// Estado de secciones colapsadas, por rol, persistido en localStorage.
+function navKey(role) { return `sk_nav_collapsed_${role}`; }
+function leerColapsadas(role) {
+  try { return new Set(JSON.parse(localStorage.getItem(navKey(role)) || '[]')); } catch { return new Set(); }
+}
+function guardarColapsadas(role, set) {
+  try { localStorage.setItem(navKey(role), JSON.stringify([...set])); } catch { /* modo privado */ }
+}
 
 const ROLE_LABEL = {
   SUPERADMINISTRADOR: 'Super Admin',
@@ -102,13 +110,20 @@ export function resetShell() {
 }
 
 function buildSidebar(role) {
-  const items = (NAV[role] || [])
-    // Items/secciones con `oculto`: se quitan del todo cuando no aplica el paquete.
-    .filter((item) => !(item.oculto && item.requiere && !item.requiere()))
-    .map((item) => {
-      if (item.section) return h('div', { class: 'sk-nav-section' }, item.section);
-      // Apartado opcional deshabilitado para esta sucursal: se muestra en gris y sin enlace.
-      if (item.requiere && !item.requiere()) {
+  // Items/secciones con `oculto`: se quitan del todo cuando no aplica el paquete.
+  const items = (NAV[role] || []).filter((item) => !(item.oculto && item.requiere && !item.requiere()));
+
+  const navEl = h('ul', { class: 'sk-nav' });
+  const colapsadas = leerColapsadas(role);
+  const grupos = []; // { nombre, grupoEl }
+
+  // Boton "Contraer/Expandir todo" (solo si hay secciones).
+  const toggleAll = h('button', { class: 'sk-nav-toggle-all' });
+  navEl.append(toggleAll);
+
+  function makeLink(item) {
+    // Apartado opcional deshabilitado para esta sucursal: gris y sin enlace.
+    if (item.requiere && !item.requiere()) {
       return h('span', {
         class: 'sk-nav-disabled',
         title: 'Apartado no habilitado para esta sucursal. Lo activa el superadministrador.',
@@ -117,10 +132,58 @@ function buildSidebar(role) {
     return h('a', { href: item.href, dataset: { href: item.href }, onClick: closeSidebar }, [
       h('i', { class: `bi ${item.icon}` }), item.label,
     ]);
+  }
+
+  let itemsActual = null; // contenedor de la seccion en curso
+
+  for (const item of items) {
+    if (item.section) {
+      const caret = h('i', { class: 'bi bi-chevron-down sk-nav-caret' });
+      const header = h('div', { class: 'sk-nav-section' }, [h('span', {}, item.section), caret]);
+      const itemsEl = h('div', { class: 'sk-nav-group-items' });
+      const grupoEl = h('div', { class: 'sk-nav-group' }, [header, itemsEl]);
+      if (colapsadas.has(item.section)) grupoEl.classList.add('collapsed');
+      header.addEventListener('click', () => {
+        grupoEl.classList.toggle('collapsed');
+        if (grupoEl.classList.contains('collapsed')) colapsadas.add(item.section);
+        else colapsadas.delete(item.section);
+        guardarColapsadas(role, colapsadas);
+        refrescarToggleAll();
+      });
+      navEl.append(grupoEl);
+      grupos.push({ nombre: item.section, grupoEl });
+      itemsActual = itemsEl;
+    } else if (item.standalone) {
+      navEl.append(makeLink(item));  // Dashboard / Configuracion: sueltos, siempre visibles
+      itemsActual = null;
+    } else {
+      (itemsActual || navEl).append(makeLink(item));
+    }
+  }
+
+  function refrescarToggleAll() {
+    const todasColapsadas = grupos.length > 0 && grupos.every((g) => g.grupoEl.classList.contains('collapsed'));
+    toggleAll.innerHTML = '';
+    toggleAll.append(
+      h('i', { class: `bi ${todasColapsadas ? 'bi-chevron-bar-down' : 'bi-chevron-bar-up'}` }),
+      todasColapsadas ? 'Expandir todo' : 'Contraer todo',
+    );
+  }
+  toggleAll.addEventListener('click', () => {
+    const todasColapsadas = grupos.every((g) => g.grupoEl.classList.contains('collapsed'));
+    for (const g of grupos) {
+      if (todasColapsadas) { g.grupoEl.classList.remove('collapsed'); colapsadas.delete(g.nombre); }
+      else { g.grupoEl.classList.add('collapsed'); colapsadas.add(g.nombre); }
+    }
+    guardarColapsadas(role, colapsadas);
+    refrescarToggleAll();
   });
+  if (grupos.length === 0) toggleAll.classList.add('d-none');
+  refrescarToggleAll();
+
   return h('aside', { class: 'sk-sidebar', id: 'sk-sidebar' }, [
     h('div', { class: 'sk-sidebar-brand' }, [h('i', { class: 'bi bi-receipt-cutoff' }), 'Facturafy']),
-    h('ul', { class: 'sk-nav' }, items),
+    navEl,
     h('div', { style: { padding: '1rem' } }, [
       h('button', { class: 'btn btn-outline-light btn-sm w-100', onClick: () => auth.logout() },
         [h('i', { class: 'bi bi-box-arrow-right me-1' }), 'Cerrar sesion']),
