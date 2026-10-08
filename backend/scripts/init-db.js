@@ -55,9 +55,10 @@ async function seed(conn) {
 
   // Sucursales
   // Centro: paquete COMPLETO (control de stock + facturacion) para probar todo.
-  // limite_credito_default 5000; usa_consulta_precio 1: kiosko de precios habilitado.
+  // usa_consulta_precio 1: kiosko de precios. usa_envio_correos 1: automatizacion de
+  // quincenas por Excel (para poder probar el apartado de Correos con el admin).
   const [suc1] = await conn.query(
-    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES (?,?,?,?,1,1,1,?)`,
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion, usa_consulta_precio, usa_envio_correos, limite_credito_default) VALUES (?,?,?,?,1,1,1,1,?)`,
     ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId, 5000]
   );
   const sucursalId = suc1.insertId;
@@ -103,6 +104,13 @@ async function seed(conn) {
     `INSERT INTO cliente (rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id)
      VALUES (?,?,?,?,?,?,?,?,?)`,
     ['210000000019', 'Comercio del Este S.R.L.', 'El Este', 'Av. Italia 3000', '099777888', 'ventas@eleste.com', 'RUT', 5000, sucursalId]
+  );
+
+  // Contactos de ejemplo para el apartado "Envio de correos" (Sucursal Centro).
+  await conn.query(
+    `INSERT INTO contacto_correo (sucursal_id, clave, nombre, email) VALUES (?,?,?,?), (?,?,?,?)`,
+    [sucursalId, '216000000013', 'Comercio del Este S.R.L.', 'ventas@eleste.com',
+     sucursalId, 'CLI-002', 'Juan Perez', 'juan.perez@example.com']
   );
 
   // Categorias

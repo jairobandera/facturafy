@@ -20,6 +20,8 @@ export const sucursalCrud = createCrud({
     { col: 'usa_facturacion', field: 'usaFacturacion', bool: true, default: false },
     // Habilita la consulta de precios (kiosko) para el cliente. Requiere facturacion.
     { col: 'usa_consulta_precio', field: 'usaConsultaPrecio', bool: true, default: false },
+    // Paquete "Solo envio de correos" (automatizacion de quincenas por Excel).
+    { col: 'usa_envio_correos', field: 'usaEnvioCorreos', bool: true, default: false },
     // Limite de credito por defecto para cuentas nuevas (lo fija el administrador).
     { col: 'limite_credito_default', field: 'limiteCreditoDefault', default: 0 },
   ],
@@ -36,7 +38,7 @@ export const sucursalRoutes = sucursalCrud.buildRoutes((routes, { normalize }) =
     const rows = await query(
       `SELECT id, nombre, direccion, telefono, empresa_id AS empresaId,
               usa_lotes AS usaLotes, usa_stock AS usaStock, usa_facturacion AS usaFacturacion,
-              usa_consulta_precio AS usaConsultaPrecio, activo
+              usa_consulta_precio AS usaConsultaPrecio, usa_envio_correos AS usaEnvioCorreos, activo
          FROM sucursal
         WHERE empresa_id = ? AND activo = 1
         ORDER BY nombre`,

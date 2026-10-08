@@ -3,7 +3,7 @@
 // quincena" = generar y mandar estos estados de cuenta; NO modifica el saldo.
 import { query } from '../../config/db.js';
 import { badRequest } from '../../core/httpError.js';
-import { resolverSmtp, construirTransporter, enviarCon, smtpEnv } from '../../core/mailer.js';
+import { resolverSmtp, construirTransporter, enviarConFallback, smtpEnv } from '../../core/mailer.js';
 import { cuentaService } from './cuenta.js';
 
 function money(n) {
@@ -120,20 +120,13 @@ export async function enviarQuincena({ sucursalId, desde, hasta, clienteIds, usu
       html: htmlEstadoCuenta(st, { desde, hasta, sucursalNombre }),
     };
     try {
-      await enviarCon(transporter, { from: smtp.from, ...mensaje });
-      resultado.enviados.push({ id: c.id, nombre, email: c.email });
+      // Reintenta con el SMTP global del .env si falla la casilla propia de la sucursal.
+      const r = await enviarConFallback({
+        transporter, from: smtp.from,
+        transporterRespaldo, fromRespaldo: respaldo?.from,
+      }, mensaje);
+      resultado.enviados.push({ id: c.id, nombre, email: c.email, via: r.via });
     } catch (err) {
-      // Reintento con el correo por defecto del .env (si la sucursal usaba el propio).
-      if (transporterRespaldo) {
-        try {
-          await enviarCon(transporterRespaldo, { from: respaldo.from, ...mensaje });
-          resultado.enviados.push({ id: c.id, nombre, email: c.email, via: 'respaldo' });
-          continue;
-        } catch (err2) {
-          resultado.fallidos.push({ id: c.id, nombre, error: `${err.message} / respaldo: ${err2.message}` });
-          continue;
-        }
-      }
       resultado.fallidos.push({ id: c.id, nombre, error: err.message });
     }
   }

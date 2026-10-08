@@ -4,6 +4,9 @@
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS envio_correo_detalle;
+DROP TABLE IF EXISTS envio_correo;
+DROP TABLE IF EXISTS contacto_correo;
 DROP TABLE IF EXISTS cotizacion;
 DROP TABLE IF EXISTS cliente_movimiento;
 DROP TABLE IF EXISTS venta_detalle;
@@ -77,6 +80,9 @@ CREATE TABLE sucursal (
   -- Habilita la pagina publica de consulta de precios (kiosko) para que el cliente
   -- escanee un codigo y vea nombre/imagen/precio. Requiere el paquete de facturacion.
   usa_consulta_precio BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Paquete "Solo envio de correos": automatiza el envio del estado de cuenta de la
+  -- quincena por email, cargando los datos desde Excel (sin usar la facturacion de la app).
+  usa_envio_correos BOOLEAN NOT NULL DEFAULT FALSE,
   -- Limite de credito por defecto para las cuentas de cliente NUEVAS de la sucursal
   -- (lo fija el administrador). 0 = sin limite. Al crear un cliente se copia a
   -- cliente.limite_credito, que el admin puede editar despues por cliente.
@@ -426,4 +432,50 @@ CREATE TABLE cliente_movimiento (
   CONSTRAINT fk_climov_cliente FOREIGN KEY (cliente_id) REFERENCES cliente(id),
   CONSTRAINT fk_climov_venta   FOREIGN KEY (venta_id)   REFERENCES venta(id),
   CONSTRAINT fk_climov_usuario FOREIGN KEY (usuario_id) REFERENCES usuario(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- CONTACTO_CORREO (paquete "Solo envio de correos") ----------------
+-- Lista de contactos reutilizable, por sucursal, para el envio del estado de cuenta.
+-- Se carga/actualiza desde Excel (merge por `clave`). No tiene relacion con `cliente`.
+-- `clave` se guarda normalizada (ver claveCodigo) para cruzar con el Excel de estado de cuenta.
+CREATE TABLE contacto_correo (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id BIGINT NOT NULL,
+  clave       VARCHAR(100) NOT NULL,
+  nombre      VARCHAR(255),
+  email       VARCHAR(255),
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uk_contacto_sucursal_clave UNIQUE (sucursal_id, clave),
+  CONSTRAINT fk_contacto_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- ENVIO_CORREO (historial de envios de quincena) ----------------
+CREATE TABLE envio_correo (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id   BIGINT NOT NULL,
+  fecha         DATETIME,
+  usuario_id    BIGINT,
+  asunto        VARCHAR(255),
+  periodo_desde DATE,
+  periodo_hasta DATE,
+  total         INT NOT NULL DEFAULT 0,
+  enviados      INT NOT NULL DEFAULT 0,
+  fallidos      INT NOT NULL DEFAULT 0,
+  sin_contacto  INT NOT NULL DEFAULT 0,
+  INDEX idx_envio_sucursal (sucursal_id, fecha),
+  CONSTRAINT fk_envio_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id),
+  CONSTRAINT fk_envio_usuario  FOREIGN KEY (usuario_id)  REFERENCES usuario(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- ENVIO_CORREO_DETALLE (destinatarios de cada envio) ----------------
+CREATE TABLE envio_correo_detalle (
+  id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+  envio_id BIGINT NOT NULL,
+  clave    VARCHAR(100),
+  nombre   VARCHAR(255),
+  email    VARCHAR(255),
+  monto    FLOAT NOT NULL DEFAULT 0,
+  estado   VARCHAR(20),                 -- ENVIADO | FALLIDO | SIN_CONTACTO
+  error    VARCHAR(255),
+  CONSTRAINT fk_enviodet_envio FOREIGN KEY (envio_id) REFERENCES envio_correo(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

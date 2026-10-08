@@ -258,8 +258,10 @@ cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /
 `GET /:id/quincena?desde=&hasta=`, `POST /quincena/enviar`, `GET /correo/estado`),
 `/ventas` (`POST /`, `GET /sucursal/:id?desde=&hasta=&estado=`, `GET /turno/:turnoId`,
 `GET /cliente/:clienteId`, `GET /:id`, `POST /:id/anular`), `/turnos` (see Turnos below) and
-`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`) and `/cotizaciones`
-(`GET /vivas?empresaId=`, `GET /venta?empresaId=&moneda=`, `GET|PUT /empresa/:empresaId`).
+`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`), `/cotizaciones`
+(`GET /vivas?empresaId=`, `GET /venta?empresaId=&moneda=`, `GET|PUT /empresa/:empresaId`) y
+`/envio-correos` (paquete solo-correos: `GET|POST /contactos/sucursal/:id`, `DELETE /contactos/:id`,
+`POST /enviar/sucursal/:id`, `GET /sucursal/:id` historial, `GET /:id` detalle del lote).
 `/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
 active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
 devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).
@@ -269,14 +271,17 @@ devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/
 **Paquetes por sucursal.** Two flags on `sucursal` decide what each branch has, set by the superadmin
 in **Configuraciones** (`#/superadmin/configuraciones`, saved via `PUT /sucursales/:id`):
 `usa_stock` (conteos + estadísticas de conteo) and `usa_facturacion` (POS + ventas + clientes +
-estadísticas de venta). Inventory (productos/categorías/proveedores) is shared. The three "packages"
-(Completo / Solo facturación / Solo stock) are just presets over these two flags. Defaults preserve
-pre-facturación behavior: `usa_stock = 1`, `usa_facturacion = 0`.
+estadísticas de venta). Hay además `usa_envio_correos` (paquete "Solo envío de correos", ver abajo).
+Inventory (productos/categorías/proveedores) is shared, pero se **oculta** cuando no hay ni stock ni
+facturación. Los "paquetes" (Completo / Solo facturación / Solo stock / **Solo envío de correos**) son
+presets sobre estos flags. Defaults: `usa_stock = 1`, el resto `0`.
 
-Enforced on both sides like `usa_lotes`: backend `assertUsaFacturacion` / `assertUsaStock`
-(`src/modules/sucursal/paquetes.js`, used by venta/cliente services and conteo creation); frontend
-`usaStock()` / `usaFacturacion()` (`core/sucursal.js`) feed the NAV (`layout.js` entries with
-`oculto: true` disappear when the package is off) and the route guards (`requiere`).
+Enforced on both sides like `usa_lotes`: backend `assertUsaFacturacion` / `assertUsaStock` /
+`assertUsaEnvioCorreos` (`src/modules/sucursal/paquetes.js`); frontend `usaStock()` / `usaFacturacion()`
+/ `usaEnvioCorreos()` (`core/sucursal.js`) feed the NAV y los route guards (`requiere`). En
+`layout.js#buildSidebar`, una **sección** con `oculto` oculta su título **y** todos sus items (patrón
+`saltando`), por eso el paquete solo-correos deja el menú limpio. Las secciones del NAV son
+**colapsables** (estado por rol en localStorage).
 
 **Rol CAJERO.** Fourth role (`usuario.service.js` ROLES). Logs in to `#/facturacion/dashboard`
 (`auth.homeRoute`). The cajero sells (POS), busca clientes para facturar y anula ventas de su turno
@@ -346,6 +351,19 @@ nombre/imagen/precio; a los 5 s vuelve a la pantalla de escaneo. Se habilita por
 Configuraciones (ahí se copia el enlace del kiosko). Backend: `producto.service.js#consultaInfo` /
 `#consultaPrecio` (busca por código de barra o código de producto, scope sucursal; devuelve solo
 nombre/imagen/precio y 403 si no está habilitado). Los endpoints son públicos a propósito.
+
+**Paquete "Solo envío de correos" (`src/modules/envioCorreo/`).** Para negocios que ya tienen su
+sistema y solo quieren automatizar el envío de la quincena por email, cargando los datos desde Excel
+(no usan la facturación de la app ni la tabla `cliente`). Flag `sucursal.usa_envio_correos`. Dos
+insumos: (1) **contactos** (`contacto_correo`: clave/nombre/email, por sucursal, reutilizable, merge
+por clave) que se cargan desde Excel; (2) **estado de cuenta** por quincena (Excel con una fila por
+ítem), que el front agrupa por **clave** y manda como `estados: [{clave, lineas:[{concepto,fecha,
+monto}], total}]`. El backend cruza por clave contra `contacto_correo`, arma el HTML con la tabla y
+envía (reusa `mailer.js#resolverSmtp` + `enviarConFallback`, el helper extraído del flujo de la
+quincena de facturación). Guarda historial en `envio_correo` + `envio_correo_detalle`. Front:
+`pages/admin/correos{Contactos,Enviar,Historial}.js`, reusando `components/excel.js`
+(`importFromExcelRaw`, `findHeaderRow`, `claveCodigo`, `parsePrecio`) y `components/plantillas.js`
+(plantillas `correosContactos` / `correosEstadoCuenta`). La clave se normaliza con `claveCodigo`.
 
 **Correo SMTP por sucursal con respaldo.** Las credenciales viven en `sucursal.smtp_*` (las carga el
 superadmin en el form de sucursal; `smtp_pass` solo se devuelve al editar). `mailer.js#resolverSmtp`

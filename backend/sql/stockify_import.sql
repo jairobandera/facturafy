@@ -20,6 +20,9 @@ USE `facturafy`;
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS envio_correo_detalle;
+DROP TABLE IF EXISTS envio_correo;
+DROP TABLE IF EXISTS contacto_correo;
 DROP TABLE IF EXISTS cotizacion;
 DROP TABLE IF EXISTS cliente_movimiento;
 DROP TABLE IF EXISTS venta_detalle;
@@ -93,6 +96,9 @@ CREATE TABLE sucursal (
   -- Habilita la pagina publica de consulta de precios (kiosko) para que el cliente
   -- escanee un codigo y vea nombre/imagen/precio. Requiere el paquete de facturacion.
   usa_consulta_precio BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Paquete "Solo envio de correos": automatiza el envio del estado de cuenta de la
+  -- quincena por email, cargando los datos desde Excel (sin usar la facturacion de la app).
+  usa_envio_correos BOOLEAN NOT NULL DEFAULT FALSE,
   -- Limite de credito por defecto para las cuentas de cliente NUEVAS de la sucursal
   -- (lo fija el administrador). 0 = sin limite. Al crear un cliente se copia a
   -- cliente.limite_credito, que el admin puede editar despues por cliente.
@@ -444,6 +450,52 @@ CREATE TABLE cliente_movimiento (
   CONSTRAINT fk_climov_usuario FOREIGN KEY (usuario_id) REFERENCES usuario(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---------------- CONTACTO_CORREO (paquete "Solo envio de correos") ----------------
+-- Lista de contactos reutilizable, por sucursal, para el envio del estado de cuenta.
+-- Se carga/actualiza desde Excel (merge por `clave`). No tiene relacion con `cliente`.
+-- `clave` se guarda normalizada (ver claveCodigo) para cruzar con el Excel de estado de cuenta.
+CREATE TABLE contacto_correo (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id BIGINT NOT NULL,
+  clave       VARCHAR(100) NOT NULL,
+  nombre      VARCHAR(255),
+  email       VARCHAR(255),
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uk_contacto_sucursal_clave UNIQUE (sucursal_id, clave),
+  CONSTRAINT fk_contacto_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- ENVIO_CORREO (historial de envios de quincena) ----------------
+CREATE TABLE envio_correo (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id   BIGINT NOT NULL,
+  fecha         DATETIME,
+  usuario_id    BIGINT,
+  asunto        VARCHAR(255),
+  periodo_desde DATE,
+  periodo_hasta DATE,
+  total         INT NOT NULL DEFAULT 0,
+  enviados      INT NOT NULL DEFAULT 0,
+  fallidos      INT NOT NULL DEFAULT 0,
+  sin_contacto  INT NOT NULL DEFAULT 0,
+  INDEX idx_envio_sucursal (sucursal_id, fecha),
+  CONSTRAINT fk_envio_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id),
+  CONSTRAINT fk_envio_usuario  FOREIGN KEY (usuario_id)  REFERENCES usuario(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- ENVIO_CORREO_DETALLE (destinatarios de cada envio) ----------------
+CREATE TABLE envio_correo_detalle (
+  id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+  envio_id BIGINT NOT NULL,
+  clave    VARCHAR(100),
+  nombre   VARCHAR(255),
+  email    VARCHAR(255),
+  monto    FLOAT NOT NULL DEFAULT 0,
+  estado   VARCHAR(20),                 -- ENVIADO | FALLIDO | SIN_CONTACTO
+  error    VARCHAR(255),
+  CONSTRAINT fk_enviodet_envio FOREIGN KEY (envio_id) REFERENCES envio_correo(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 --  Datos de ejemplo (usuarios de prueba, contrasenia = "12345")
 -- ============================================================
@@ -453,9 +505,14 @@ INSERT INTO empresa (id, nombre, rut, direccion, telefono) VALUES
 
 -- Centro: paquete COMPLETO (stock + facturacion) y limite de credito por defecto 5000.
 -- Pocitos: solo control de stock y sin Lotes, para mostrar las opciones del superadmin.
-INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES
-  (1, 'Sucursal Centro',  'Calle 18 de Julio 1234', '099333444', 1, 1, 1, 1, 1, 5000),
-  (2, 'Sucursal Pocitos', 'Av. Brasil 2500',        '099555666', 1, 0, 1, 0, 0, 0);
+INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, usa_envio_correos, limite_credito_default) VALUES
+  (1, 'Sucursal Centro',  'Calle 18 de Julio 1234', '099333444', 1, 1, 1, 1, 1, 1, 5000),
+  (2, 'Sucursal Pocitos', 'Av. Brasil 2500',        '099555666', 1, 0, 1, 0, 0, 0, 0);
+
+-- Contactos de ejemplo para el apartado "Envio de correos" (Sucursal Centro).
+INSERT INTO contacto_correo (sucursal_id, clave, nombre, email) VALUES
+  (1, '216000000013', 'Comercio del Este S.R.L.', 'ventas@eleste.com'),
+  (1, 'CLI-002', 'Juan Perez', 'juan.perez@example.com');
 
 -- PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
 INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES
@@ -471,11 +528,11 @@ INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'SUPERADMINISTRADOR', 1, 0),
-  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'ADMINISTRADOR',      1, 0),
-  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'EMPLEADO',           1, 0),
-  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'EMPLEADO',           1, 1),
-  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'CAJERO',             1, 0);
+  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'SUPERADMINISTRADOR', 1, 0),
+  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'ADMINISTRADOR',      1, 0),
+  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'EMPLEADO',           1, 0),
+  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'EMPLEADO',           1, 1),
+  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'CAJERO',             1, 0);
 
 -- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
 INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES

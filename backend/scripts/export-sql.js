@@ -32,9 +32,14 @@ INSERT INTO empresa (id, nombre, rut, direccion, telefono) VALUES
 
 -- Centro: paquete COMPLETO (stock + facturacion) y limite de credito por defecto 5000.
 -- Pocitos: solo control de stock y sin Lotes, para mostrar las opciones del superadmin.
-INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES
-  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1, 1, 1, 1, 5000),
-  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0, 1, 0, 0, 0);
+INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, usa_envio_correos, limite_credito_default) VALUES
+  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1, 1, 1, 1, 1, 5000),
+  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0, 1, 0, 0, 0, 0);
+
+-- Contactos de ejemplo para el apartado "Envio de correos" (Sucursal Centro).
+INSERT INTO contacto_correo (sucursal_id, clave, nombre, email) VALUES
+  (1, ${q('216000000013')}, ${q('Comercio del Este S.R.L.')}, ${q('ventas@eleste.com')}),
+  (1, ${q('CLI-002')}, ${q('Juan Perez')}, ${q('juan.perez@example.com')});
 
 -- PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
 INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES

@@ -1,7 +1,11 @@
 // Renderiza el "shell" de la aplicacion (sidebar + topbar) y provee el area de contenido.
 import { h, clear } from './dom.js';
 import { auth } from './auth.js';
-import { usaLotes, usaStock, usaFacturacion } from './sucursal.js';
+import { usaLotes, usaStock, usaFacturacion, usaEnvioCorreos } from './sucursal.js';
+
+// El inventario (productos/categorias/proveedores) solo tiene sentido con stock o
+// facturacion; en el paquete "solo envio de correos" se oculta por completo.
+const usaInventario = () => usaStock() || usaFacturacion();
 
 // Secciones/items con `oculto: true` desaparecen cuando su `requiere()` da false
 // (paquetes de la sucursal). Los que tienen `requiere` sin `oculto` (Lotes) se
@@ -23,7 +27,7 @@ const NAV = {
   ],
   ADMINISTRADOR: [
     { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/admin/dashboard', standalone: true },
-    { section: 'Inventario' },
+    { section: 'Inventario', requiere: usaInventario, oculto: true },
     { icon: 'bi-tags', label: 'Categorias', href: '#/admin/gestionar-categorias' },
     { icon: 'bi-box-seam', label: 'Productos', href: '#/admin/gestionar-productos' },
     { icon: 'bi-boxes', label: 'Lotes', href: '#/admin/gestionar-lotes', requiere: usaLotes },
@@ -45,6 +49,11 @@ const NAV = {
     { icon: 'bi-bar-chart-line', label: 'Estadisticas de facturacion', href: '#/admin/estadisticas-facturacion', requiere: usaFacturacion, oculto: true },
     // Configuracion queda suelta (sin apartado)
     { icon: 'bi-sliders', label: 'Configuracion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true, standalone: true },
+    // Envio de correos (paquete "Solo envio de correos")
+    { section: 'Correos', requiere: usaEnvioCorreos, oculto: true },
+    { icon: 'bi-person-lines-fill', label: 'Contactos', href: '#/admin/correos-contactos', requiere: usaEnvioCorreos, oculto: true },
+    { icon: 'bi-envelope-paper', label: 'Enviar quincena', href: '#/admin/correos-enviar', requiere: usaEnvioCorreos, oculto: true },
+    { icon: 'bi-clock-history', label: 'Historial de envios', href: '#/admin/correos-historial', requiere: usaEnvioCorreos, oculto: true },
   ],
   EMPLEADO: [
     { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/empleado/dashboard', standalone: true },
@@ -110,8 +119,8 @@ export function resetShell() {
 }
 
 function buildSidebar(role) {
-  // Items/secciones con `oculto`: se quitan del todo cuando no aplica el paquete.
-  const items = (NAV[role] || []).filter((item) => !(item.oculto && item.requiere && !item.requiere()));
+  const items = NAV[role] || [];
+  const estaOculto = (item) => item.oculto && item.requiere && !item.requiere();
 
   const navEl = h('ul', { class: 'sk-nav' });
   const colapsadas = leerColapsadas(role);
@@ -135,9 +144,13 @@ function buildSidebar(role) {
   }
 
   let itemsActual = null; // contenedor de la seccion en curso
+  let saltando = false;   // la seccion en curso esta oculta: se saltan sus items
 
   for (const item of items) {
     if (item.section) {
+      // Seccion oculta (no aplica el paquete): se oculta el titulo Y sus items.
+      if (estaOculto(item)) { saltando = true; itemsActual = null; continue; }
+      saltando = false;
       const caret = h('i', { class: 'bi bi-chevron-down sk-nav-caret' });
       const header = h('div', { class: 'sk-nav-section' }, [h('span', {}, item.section), caret]);
       const itemsEl = h('div', { class: 'sk-nav-group-items' });
@@ -154,9 +167,12 @@ function buildSidebar(role) {
       grupos.push({ nombre: item.section, grupoEl });
       itemsActual = itemsEl;
     } else if (item.standalone) {
-      navEl.append(makeLink(item));  // Dashboard / Configuracion: sueltos, siempre visibles
+      saltando = false;
       itemsActual = null;
+      if (!estaOculto(item)) navEl.append(makeLink(item)); // Dashboard / Configuracion sueltos
     } else {
+      if (saltando) continue;                 // item de una seccion oculta
+      if (estaOculto(item)) continue;         // item con su propio oculto
       (itemsActual || navEl).append(makeLink(item));
     }
   }

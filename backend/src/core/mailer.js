@@ -58,3 +58,28 @@ export async function enviarCon(transporter, { from, to, subject, html }) {
   const info = await transporter.sendMail({ from, to, subject, html });
   return info.messageId;
 }
+
+/**
+ * Envia un mensaje con la casilla propia y, si falla y hay respaldo (el SMTP global
+ * del .env), reintenta con el respaldo. Devuelve { via: 'propio' | 'respaldo' } o lanza
+ * con el error combinado si ambos fallan. Lo usan la quincena de facturacion y el
+ * paquete de envio de correos.
+ * @param {{ transporter, from, transporterRespaldo?, fromRespaldo? }} ctx
+ * @param {{ to, subject, html }} msg
+ */
+export async function enviarConFallback(ctx, msg) {
+  try {
+    await enviarCon(ctx.transporter, { from: ctx.from, ...msg });
+    return { via: 'propio' };
+  } catch (err) {
+    if (ctx.transporterRespaldo) {
+      try {
+        await enviarCon(ctx.transporterRespaldo, { from: ctx.fromRespaldo, ...msg });
+        return { via: 'respaldo' };
+      } catch (err2) {
+        throw new Error(`${err.message} / respaldo: ${err2.message}`);
+      }
+    }
+    throw err;
+  }
+}

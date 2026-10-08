@@ -9,12 +9,14 @@ import { pageHeader, spinner } from '../../components/page.js';
 
 // Presets de paquete -> flags.
 const PAQUETES = {
-  COMPLETO: { usaStock: true, usaFacturacion: true },
-  SOLO_FACTURACION: { usaStock: false, usaFacturacion: true },
-  SOLO_STOCK: { usaStock: true, usaFacturacion: false },
+  COMPLETO: { usaStock: true, usaFacturacion: true, usaEnvioCorreos: false },
+  SOLO_FACTURACION: { usaStock: false, usaFacturacion: true, usaEnvioCorreos: false },
+  SOLO_STOCK: { usaStock: true, usaFacturacion: false, usaEnvioCorreos: false },
+  SOLO_CORREOS: { usaStock: false, usaFacturacion: false, usaEnvioCorreos: true },
 };
 
 function paqueteDe(suc) {
+  if (suc.usaEnvioCorreos && !suc.usaStock && !suc.usaFacturacion) return 'SOLO_CORREOS';
   if (suc.usaStock && suc.usaFacturacion) return 'COMPLETO';
   if (!suc.usaStock && suc.usaFacturacion) return 'SOLO_FACTURACION';
   return 'SOLO_STOCK';
@@ -119,6 +121,7 @@ function formularioSucursal(suc) {
     COMPLETO: 'Completo (facturación + control de stock)',
     SOLO_FACTURACION: 'Solo facturación',
     SOLO_STOCK: 'Solo control de stock',
+    SOLO_CORREOS: 'Solo envío de correos (automatizar quincenas por Excel)',
   }).map(([value, label]) => {
     const input = h('input', {
       class: 'form-check-input', type: 'radio', name: 'cfg-paquete', id: `pq-${value}`,
@@ -137,6 +140,7 @@ function formularioSucursal(suc) {
       await api.put(`/sucursales/${suc.id}`, {
         usaStock: flags.usaStock,
         usaFacturacion: flags.usaFacturacion,
+        usaEnvioCorreos: !!flags.usaEnvioCorreos,
         usaLotes: flags.usaStock ? lotesCheck.checked : false,
         usaConsultaPrecio,
       });

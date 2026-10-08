@@ -52,6 +52,28 @@ export const PLANTILLAS = {
       { Codigo: '003001', StockFinal: 45 },
     ],
   },
+  // --- Paquete "Solo envio de correos" ---
+  correosContactos: {
+    titulo: 'Contactos (correos)',
+    icon: 'bi-person-lines-fill',
+    archivo: 'plantilla_contactos_correo',
+    descripcion: 'Lista de clientes a los que mandar el estado de cuenta. Una fila por cliente. La Clave (RUT o código) se usa para cruzar con el estado de cuenta.',
+    filas: [
+      { Clave: '216000000013', Nombre: 'Comercio del Este S.R.L.', Email: 'ventas@eleste.com' },
+      { Clave: 'CLI-002', Nombre: 'Juan Pérez', Email: 'juan.perez@example.com' },
+    ],
+  },
+  correosEstadoCuenta: {
+    titulo: 'Estado de cuenta (quincena)',
+    icon: 'bi-envelope-paper',
+    archivo: 'plantilla_estado_cuenta',
+    descripcion: 'Una fila por ítem/factura. Varias filas de la misma Clave se agrupan en el correo de ese cliente. La Clave debe coincidir con la de los contactos.',
+    filas: [
+      { Clave: '216000000013', Concepto: 'Factura A-1001', Fecha: '2026-10-01', Monto: 1500 },
+      { Clave: '216000000013', Concepto: 'Factura A-1020', Fecha: '2026-10-07', Monto: 800 },
+      { Clave: 'CLI-002', Concepto: 'Servicio octubre', Fecha: '2026-10-05', Monto: 2300 },
+    ],
+  },
 };
 
 /** Descarga la plantilla indicada (clave de PLANTILLAS). */

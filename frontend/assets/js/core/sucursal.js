@@ -124,3 +124,8 @@ export function usaFacturacion() {
   const s = sucursalActual();
   return s ? s.usaFacturacion === true : false;
 }
+
+export function usaEnvioCorreos() {
+  const s = sucursalActual();
+  return s ? s.usaEnvioCorreos === true : false;
+}

@@ -8,7 +8,9 @@ import { forbidden, notFound } from '../../core/httpError.js';
 
 async function flagsDeSucursal(sucursalId) {
   const rows = await query(
-    `SELECT usa_stock AS usaStock, usa_facturacion AS usaFacturacion FROM sucursal WHERE id = ?`,
+    `SELECT usa_stock AS usaStock, usa_facturacion AS usaFacturacion,
+            usa_envio_correos AS usaEnvioCorreos
+       FROM sucursal WHERE id = ?`,
     [sucursalId]
   );
   if (!rows.length) throw notFound(`Sucursal no encontrada con id: ${sucursalId}`);
@@ -28,5 +30,13 @@ export async function assertUsaStock(sucursalId) {
   const flags = await flagsDeSucursal(sucursalId);
   if (!flags.usaStock) {
     throw forbidden('El paquete de control de stock no esta habilitado para esta sucursal');
+  }
+}
+
+/** La sucursal debe tener habilitado el paquete de envio de correos. */
+export async function assertUsaEnvioCorreos(sucursalId) {
+  const flags = await flagsDeSucursal(sucursalId);
+  if (!flags.usaEnvioCorreos) {
+    throw forbidden('El paquete de envio de correos no esta habilitado para esta sucursal');
   }
 }

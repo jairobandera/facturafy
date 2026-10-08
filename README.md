@@ -5,9 +5,10 @@ Permite administrar empresas, sucursales, usuarios (con roles), categorías, pro
 lotes y **clientes**; **facturar en un punto de venta** (POS) con descuento automático de stock; y
 realizar **conteos de inventario colaborativos en tiempo real**, con reportes de diferencias.
 
-Cada sucursal contrata uno de tres **paquetes** (los configura el superadministrador): **Completo**
-(facturación + control de stock), **Solo facturación** o **Solo control de stock**. Una misma empresa
-puede tener una sucursal con el paquete completo y otra con uno solo.
+Cada sucursal contrata uno de cuatro **paquetes** (los configura el superadministrador): **Completo**
+(facturación + control de stock), **Solo facturación**, **Solo control de stock** o **Solo envío de
+correos** (automatizar el envío de la quincena por email desde Excel). Una misma empresa puede tener
+una sucursal con el paquete completo y otra con uno solo.
 
 Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo stack **sin frameworks**.
 
@@ -74,6 +75,20 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
 - **Factura electrónica de Uruguay (DGI/CFE)**: **preparada** (columnas, variables de entorno y un
   adaptador `cfe.js`). Hoy las ventas se registran internamente (`cfe_estado = INTERNO`); activarla
   es un cambio mínimo cuando se tengan las credenciales.
+
+### Envío de correos (paquete de servicio)
+
+Para negocios que **ya tienen su propio sistema** y solo quieren **automatizar el envío de la quincena
+por email** (no usan la facturación ni los clientes de la app). Todo se carga desde **Excel**:
+
+- **Contactos**: se sube un Excel con la lista de clientes (**Clave** — RUT o código —, **Nombre**,
+  **Email**). Queda guardada y se reutiliza. Hay plantilla descargable.
+- **Enviar quincena**: se sube un Excel con el **estado de cuenta** (una fila por ítem: Clave,
+  Concepto, Fecha, Monto). La app lo **agrupa por cliente**, lo cruza con los contactos por la clave,
+  muestra una **vista previa** (quién recibe, total, y marca los que no tienen contacto) y manda a cada
+  uno su estado de cuenta con una **tabla de detalle** y el total a pagar. Usa el SMTP de la sucursal
+  (con respaldo al `.env`).
+- **Historial**: queda registrado cada envío (fecha, enviados/fallidos/sin contacto) con su detalle.
 
 ### Control de stock
 
@@ -188,9 +203,10 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `009-smtp-por-sucursal.sql` — credenciales de correo por sucursal.
 > - `010-monedas-comentario-vuelto.sql` — cotizaciones de moneda, comentario y vuelto en la venta.
 > - `011-consulta-precio.sql` — flag de consulta de precios (kiosko) por sucursal.
+> - `012-envio-correos.sql` — paquete "Solo envío de correos" (contactos + historial).
 >
 > ```bash
-> mysql -u <usuario> -p facturafy < backend/sql/migrations/011-consulta-precio.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/012-envio-correos.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente
@@ -269,8 +285,9 @@ Recursos de stock: `/seguridad/login`, `/usuarios`, `/empresas`, `/sucursales`, 
 Recursos de facturación: `/clientes` (CRUD + cuenta corriente: `/:id/cuenta`, `/:id/pagos`,
 `/:id/mora`, `/:id/limite`, `/quincena/enviar`), `/ventas` (incluye `/turno/:id` y `/cliente/:id`),
 `/turnos` (abrir, unirse, cerrar, reporte de arqueo), `/cotizaciones` (cambio en vivo + manual por
-empresa) y `/estadisticas-venta`. `/sucursales` suma la gestión de **PINes** (`/:id/pines`) y de
-**correo SMTP** (`/:id/smtp`, la contraseña nunca se expone salvo al editar la sucursal).
+empresa), `/envio-correos` (paquete solo-correos: contactos + envío + historial) y
+`/estadisticas-venta`. `/sucursales` suma la gestión de **PINes** (`/:id/pines`) y de **correo SMTP**
+(`/:id/smtp`, la contraseña nunca se expone salvo al editar la sucursal).
 
 ## Notas
 

@@ -2,7 +2,7 @@
 import { router } from './core/router.js';
 import { auth } from './core/auth.js';
 import { runCleanups } from './core/lifecycle.js';
-import { cargarSucursal, usaLotes, usaStock, usaFacturacion } from './core/sucursal.js';
+import { cargarSucursal, usaLotes, usaStock, usaFacturacion, usaEnvioCorreos } from './core/sucursal.js';
 import { ui } from './core/ui.js';
 
 import { loginPage } from './pages/login.js';
@@ -31,6 +31,9 @@ import { adminClientesPage } from './pages/admin/clientes.js';
 import { clienteCuentaPage } from './pages/admin/clienteCuenta.js';
 import { turnosAdminPage } from './pages/admin/turnos.js';
 import { configuracionFacturacionPage } from './pages/admin/configuracionFacturacion.js';
+import { correosContactosPage } from './pages/admin/correosContactos.js';
+import { correosEnviarPage } from './pages/admin/correosEnviar.js';
+import { correosHistorialPage } from './pages/admin/correosHistorial.js';
 // Empleado
 import { empleadoDashboard } from './pages/empleado/dashboard.js';
 import { conteoLibreEmpleado, conteoCategoriasEmpleado } from './pages/empleado/conteos.js';
@@ -94,6 +97,10 @@ router.add('/admin/cliente-cuenta/:id', page(clienteCuentaPage), { role: AD, req
 router.add('/admin/turnos', page(turnosAdminPage), { role: AD, requiere: usaFacturacion });
 router.add('/admin/configuracion', page(configuracionFacturacionPage), { role: AD, requiere: usaFacturacion });
 router.add('/admin/estadisticas-facturacion', page(estadisticasFacturacion), { role: AD, requiere: usaFacturacion });
+// Envio de correos (paquete "Solo envio de correos")
+router.add('/admin/correos-contactos', page(correosContactosPage), { role: AD, requiere: usaEnvioCorreos });
+router.add('/admin/correos-enviar', page(correosEnviarPage), { role: AD, requiere: usaEnvioCorreos });
+router.add('/admin/correos-historial', page(correosHistorialPage), { role: AD, requiere: usaEnvioCorreos });
 
 // ---- Empleado ----
 router.add('/empleado/dashboard', page(empleadoDashboard), { role: EM });
