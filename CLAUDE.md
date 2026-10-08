@@ -247,7 +247,11 @@ Beyond the CRUD routes, `/lotes` adds `GET /sucursal/:id/por-vencer?dias=30` (ex
 `diasRestantes`), `GET /sucursal/:id/resumen` (stock del producto vs stock en lotes por producto) and
 `POST /ajustar-stock` (`{ productoId }`, iguala el stock del producto a la suma de sus lotes).
 `/productos` adds `GET /codigo/:codigoProducto/sucursal/:sucursalId` — the sucursal-scoped lookup
-that should be preferred over the ambiguous `GET /codigo/:codigoProducto`.
+that should be preferred over the ambiguous `GET /codigo/:codigoProducto` — y dos endpoints
+**públicos** (sin login) para el kiosko de consulta de precios:
+`GET /productos/consulta/sucursal/:id` (`{ sucursalNombre, habilitado }`) y
+`GET /productos/consulta/sucursal/:id/codigo/:codigo` (`{ nombre, imagen, precio }` o 404; 403 si la
+sucursal no tiene la consulta habilitada).
 
 Facturación resources: `/clientes` (CRUD + `GET /sucursal/:id` + `GET /sucursal/:id/rut/:rut`;
 cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /:id/limite`,
@@ -334,6 +338,14 @@ carga el admin en Configuración. `cotizacion.module.js#paraVenta` resuelve la c
 `#paraConversor` la del conversor del cajero (**API; admin si falla**). `venta.efectivo_recibido` y
 `vuelto` (en `moneda_pago`) guardan el efectivo y el vuelto de las ventas al contado, y
 `venta.comentario` una nota del cajero que sale en la boleta (PDF) y en el email del estado de cuenta.
+
+**Consulta de precios (kiosko).** Página pública `frontend/consulta.html?sucursal=<id>` (HTML
+autónomo, sin login ni el SPA) para que el cliente pase un producto por el lector y vea
+nombre/imagen/precio; a los 5 s vuelve a la pantalla de escaneo. Se habilita por sucursal con el flag
+`sucursal.usa_consulta_precio` (requiere `usa_facturacion`), que el **superadmin** activa en
+Configuraciones (ahí se copia el enlace del kiosko). Backend: `producto.service.js#consultaInfo` /
+`#consultaPrecio` (busca por código de barra o código de producto, scope sucursal; devuelve solo
+nombre/imagen/precio y 403 si no está habilitado). Los endpoints son públicos a propósito.
 
 **Correo SMTP por sucursal con respaldo.** Las credenciales viven en `sucursal.smtp_*` (las carga el
 superadmin en el form de sucursal; `smtp_pass` solo se devuelve al editar). `mailer.js#resolverSmtp`

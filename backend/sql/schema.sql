@@ -74,6 +74,9 @@ CREATE TABLE sucursal (
   -- Una empresa puede tener una sucursal con el paquete completo y otra con uno solo.
   usa_stock       BOOLEAN NOT NULL DEFAULT TRUE,
   usa_facturacion BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Habilita la pagina publica de consulta de precios (kiosko) para que el cliente
+  -- escanee un codigo y vea nombre/imagen/precio. Requiere el paquete de facturacion.
+  usa_consulta_precio BOOLEAN NOT NULL DEFAULT FALSE,
   -- Limite de credito por defecto para las cuentas de cliente NUEVAS de la sucursal
   -- (lo fija el administrador). 0 = sin limite. Al crear un cliente se copia a
   -- cliente.limite_credito, que el admin puede editar despues por cliente.

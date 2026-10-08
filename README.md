@@ -65,6 +65,10 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
 - **Configuración** (administrador): **PINes de anulación** (hasta 3 por sucursal), **límite de
   crédito por defecto** para las cuentas nuevas y **cotizaciones** de USD/ARS/EUR (compra/venta,
   compartidas por la empresa).
+- **Consulta de precios (kiosko)**: una página **pública** (`/consulta.html?sucursal=<id>`) para poner
+  en el local, donde el cliente pasa un producto por el lector y ve **nombre, imagen y precio**; a los
+  5 segundos vuelve sola a la pantalla de escaneo. Se habilita por sucursal (requiere facturación)
+  desde **Configuraciones** del superadministrador, que ahí mismo copia el enlace del kiosko.
 - **Estadísticas de facturación**: total facturado, contado vs crédito, ventas anuladas y productos
   más vendidos (separadas de las estadísticas de conteos).
 - **Factura electrónica de Uruguay (DGI/CFE)**: **preparada** (columnas, variables de entorno y un
@@ -183,9 +187,10 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `008-pines-y-cuenta-corriente.sql` — PINes de anulación, cuenta corriente y límites de crédito.
 > - `009-smtp-por-sucursal.sql` — credenciales de correo por sucursal.
 > - `010-monedas-comentario-vuelto.sql` — cotizaciones de moneda, comentario y vuelto en la venta.
+> - `011-consulta-precio.sql` — flag de consulta de precios (kiosko) por sucursal.
 >
 > ```bash
-> mysql -u <usuario> -p facturafy < backend/sql/migrations/010-monedas-comentario-vuelto.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/011-consulta-precio.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente

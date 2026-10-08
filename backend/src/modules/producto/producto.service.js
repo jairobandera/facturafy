@@ -1,5 +1,5 @@
 import { query, transaction } from '../../config/db.js';
-import { badRequest, notFound } from '../../core/httpError.js';
+import { badRequest, notFound, forbidden } from '../../core/httpError.js';
 import { productoRepository, normalizeProducto } from './producto.repository.js';
 
 function validateProductoDto(dto) {
@@ -218,6 +218,42 @@ export const productoService = {
   getByCodigoProducto: (codigo) => productoRepository.findByCodigoProductoActive(codigo),
   getByCodigoProductoAndSucursal: (codigo, sucursalId) =>
     productoRepository.findByCodigoProductoActiveAndSucursal(codigo, sucursalId),
+
+  // ---- Consulta de precios (kiosko publico) ----
+  // Estado de la consulta: si esta habilitada y el nombre de la sucursal. Publico.
+  async consultaInfo(sucursalId) {
+    const rows = await query(
+      `SELECT nombre, usa_facturacion AS f, usa_consulta_precio AS c FROM sucursal WHERE id = ? AND activo = 1`,
+      [sucursalId]
+    );
+    if (!rows.length) throw notFound(`Sucursal no encontrada con id: ${sucursalId}`);
+    return { sucursalNombre: rows[0].nombre, habilitado: !!(rows[0].f && rows[0].c) };
+  },
+
+  // Busca un producto por codigo de barra o codigo de producto dentro de la sucursal
+  // y devuelve SOLO nombre/imagen/precio. Solo si la sucursal tiene la consulta habilitada.
+  async consultaPrecio(sucursalId, codigo) {
+    const suc = await query(
+      `SELECT usa_facturacion AS f, usa_consulta_precio AS c FROM sucursal WHERE id = ? AND activo = 1`,
+      [sucursalId]
+    );
+    if (!suc.length) throw notFound(`Sucursal no encontrada con id: ${sucursalId}`);
+    if (!suc[0].f || !suc[0].c) throw forbidden('La consulta de precios no está habilitada para esta sucursal');
+    const term = String(codigo || '').trim();
+    if (!term) return null;
+    const rows = await query(
+      `SELECT p.nombre, p.imagen, p.precio
+         FROM producto p
+        WHERE p.sucursal_id = ? AND p.activo = 1
+          AND (p.codigo_producto = ? OR EXISTS (
+            SELECT 1 FROM codigo_barra cb
+             WHERE cb.producto_id = p.id AND cb.activo = 1 AND cb.codigo = ?))
+        LIMIT 1`,
+      [sucursalId, term, term]
+    );
+    if (!rows.length) return null;
+    return { nombre: rows[0].nombre, imagen: rows[0].imagen || null, precio: Number(rows[0].precio) };
+  },
 
   async create(dto) {
     validateProductoDto(dto);

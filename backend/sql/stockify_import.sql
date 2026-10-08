@@ -90,6 +90,9 @@ CREATE TABLE sucursal (
   -- Una empresa puede tener una sucursal con el paquete completo y otra con uno solo.
   usa_stock       BOOLEAN NOT NULL DEFAULT TRUE,
   usa_facturacion BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Habilita la pagina publica de consulta de precios (kiosko) para que el cliente
+  -- escanee un codigo y vea nombre/imagen/precio. Requiere el paquete de facturacion.
+  usa_consulta_precio BOOLEAN NOT NULL DEFAULT FALSE,
   -- Limite de credito por defecto para las cuentas de cliente NUEVAS de la sucursal
   -- (lo fija el administrador). 0 = sin limite. Al crear un cliente se copia a
   -- cliente.limite_credito, que el admin puede editar despues por cliente.
@@ -450,9 +453,9 @@ INSERT INTO empresa (id, nombre, rut, direccion, telefono) VALUES
 
 -- Centro: paquete COMPLETO (stock + facturacion) y limite de credito por defecto 5000.
 -- Pocitos: solo control de stock y sin Lotes, para mostrar las opciones del superadmin.
-INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, limite_credito_default) VALUES
-  (1, 'Sucursal Centro',  'Calle 18 de Julio 1234', '099333444', 1, 1, 1, 1, 5000),
-  (2, 'Sucursal Pocitos', 'Av. Brasil 2500',        '099555666', 1, 0, 1, 0, 0);
+INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES
+  (1, 'Sucursal Centro',  'Calle 18 de Julio 1234', '099333444', 1, 1, 1, 1, 1, 5000),
+  (2, 'Sucursal Pocitos', 'Av. Brasil 2500',        '099555666', 1, 0, 1, 0, 0, 0);
 
 -- PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
 INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES
@@ -468,11 +471,11 @@ INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$oecqWx1ADYLAqpkXLHZWbOwG3SfXGEqK4fI4bWNuSGDhWsvZ3z8Jm', 'SUPERADMINISTRADOR', 1, 0),
-  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$oecqWx1ADYLAqpkXLHZWbOwG3SfXGEqK4fI4bWNuSGDhWsvZ3z8Jm', 'ADMINISTRADOR',      1, 0),
-  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$oecqWx1ADYLAqpkXLHZWbOwG3SfXGEqK4fI4bWNuSGDhWsvZ3z8Jm', 'EMPLEADO',           1, 0),
-  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$oecqWx1ADYLAqpkXLHZWbOwG3SfXGEqK4fI4bWNuSGDhWsvZ3z8Jm', 'EMPLEADO',           1, 1),
-  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$oecqWx1ADYLAqpkXLHZWbOwG3SfXGEqK4fI4bWNuSGDhWsvZ3z8Jm', 'CAJERO',             1, 0);
+  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'SUPERADMINISTRADOR', 1, 0),
+  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'ADMINISTRADOR',      1, 0),
+  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'EMPLEADO',           1, 0),
+  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'EMPLEADO',           1, 1),
+  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$o46aqyGN.C84y4I4kcUKU.kajrNR1sDjnIm6TVHCecyktKmZwJkVG', 'CAJERO',             1, 0);
 
 -- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
 INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES

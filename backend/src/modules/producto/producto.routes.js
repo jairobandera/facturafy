@@ -11,6 +11,16 @@ productoRoutes.get('/all', async (ctx, res) => sendJson(res, 200, await producto
 productoRoutes.get('/sucursal/:sucursalId/activos', async (ctx, res) =>
   sendJson(res, 200, await productoService.getActiveBySucursal(ctx.params.sucursalId)));
 
+// ---- Consulta de precios (kiosko publico, sin login) ----
+// Estado (si esta habilitada + nombre de la sucursal) y consulta por codigo.
+productoRoutes.get('/consulta/sucursal/:sucursalId', async (ctx, res) =>
+  sendJson(res, 200, await productoService.consultaInfo(ctx.params.sucursalId)));
+
+productoRoutes.get('/consulta/sucursal/:sucursalId/codigo/:codigo', async (ctx, res) => {
+  const p = await productoService.consultaPrecio(ctx.params.sucursalId, ctx.params.codigo);
+  p ? sendJson(res, 200, p) : sendJson(res, 404, null);
+});
+
 // Incluye inactivos: lo usan los reportes de conteos ya cerrados.
 productoRoutes.get('/sucursal/:sucursalId', async (ctx, res) =>
   sendJson(res, 200, await productoService.getBySucursal(ctx.params.sucursalId)));

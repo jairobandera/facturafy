@@ -55,9 +55,9 @@ async function seed(conn) {
 
   // Sucursales
   // Centro: paquete COMPLETO (control de stock + facturacion) para probar todo.
-  // limite_credito_default 5000: limite de credito por defecto de cuentas nuevas.
+  // limite_credito_default 5000; usa_consulta_precio 1: kiosko de precios habilitado.
   const [suc1] = await conn.query(
-    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion, limite_credito_default) VALUES (?,?,?,?,1,1,?)`,
+    `INSERT INTO sucursal (nombre, direccion, telefono, empresa_id, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES (?,?,?,?,1,1,1,?)`,
     ['Sucursal Centro', 'Calle 18 de Julio 1234', '099333444', empresaId, 5000]
   );
   const sucursalId = suc1.insertId;

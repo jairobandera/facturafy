@@ -32,9 +32,9 @@ INSERT INTO empresa (id, nombre, rut, direccion, telefono) VALUES
 
 -- Centro: paquete COMPLETO (stock + facturacion) y limite de credito por defecto 5000.
 -- Pocitos: solo control de stock y sin Lotes, para mostrar las opciones del superadmin.
-INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, limite_credito_default) VALUES
-  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1, 1, 1, 5000),
-  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0, 1, 0, 0);
+INSERT INTO sucursal (id, nombre, direccion, telefono, empresa_id, usa_lotes, usa_stock, usa_facturacion, usa_consulta_precio, limite_credito_default) VALUES
+  (1, ${q('Sucursal Centro')},  ${q('Calle 18 de Julio 1234')}, ${q('099333444')}, 1, 1, 1, 1, 1, 5000),
+  (2, ${q('Sucursal Pocitos')}, ${q('Av. Brasil 2500')},        ${q('099555666')}, 1, 0, 1, 0, 0, 0);
 
 -- PINes de anulacion de la Sucursal Centro (hasta 3). El cajero ingresa uno para anular.
 INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES

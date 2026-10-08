@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Consulta de precios</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <style>
+    :root { --azul: #2563eb; --fondo: #0f172a; --card: #111827; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #1e293b, var(--fondo));
+      color: #e5e7eb; display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px; text-align: center; user-select: none;
+    }
+    .wrap { width: min(820px, 96vw); }
+    .marca { position: fixed; top: 18px; left: 24px; font-weight: 700; letter-spacing: .5px; color: #94a3b8; }
+    .marca i { color: var(--azul); }
+    .sucursal { position: fixed; top: 18px; right: 24px; color: #94a3b8; font-size: 1rem; }
+
+    /* Pantalla de escaneo */
+    .scan .icono { font-size: 7rem; color: var(--azul); line-height: 1; animation: pulso 1.8s ease-in-out infinite; }
+    .scan h1 { font-size: 2.4rem; font-weight: 700; margin: 18px 0 6px; }
+    .scan p { font-size: 1.3rem; color: #94a3b8; margin: 0; }
+    @keyframes pulso { 0%,100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.06); opacity: 1; } }
+
+    /* Resultado */
+    .card { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 24px; padding: 32px; }
+    .card img { max-height: 320px; max-width: 100%; border-radius: 16px; background: #fff; object-fit: contain; }
+    .card .nombre { font-size: 2.6rem; font-weight: 700; margin: 18px 0 8px; line-height: 1.15; }
+    .card .precio { font-size: 4.4rem; font-weight: 800; color: #34d399; letter-spacing: -1px; }
+    .card .vuelve { color: #64748b; font-size: 1rem; margin-top: 14px; }
+
+    .aviso .icono { font-size: 5rem; }
+    .aviso.error .icono { color: #f87171; }
+    .aviso.warn .icono { color: #fbbf24; }
+    .aviso h1 { font-size: 2rem; margin-top: 10px; }
+    .hidden { display: none; }
+    @media (max-width: 575px) {
+      .scan .icono { font-size: 5rem; } .scan h1 { font-size: 1.7rem; }
+      .card .nombre { font-size: 1.8rem; } .card .precio { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="marca"><i class="bi bi-upc-scan"></i> Facturafy</div>
+  <div class="sucursal" id="sucursal"></div>
+
+  <div class="wrap">
+    <!-- Pantalla principal: escanear -->
+    <div id="scan" class="scan">
+      <i class="bi bi-upc-scan icono"></i>
+      <h1>Pasá el producto por el lector</h1>
+      <p>para consultar su precio</p>
+    </div>
+
+    <!-- Resultado -->
+    <div id="resultado" class="card hidden">
+      <img id="r-img" alt="" class="hidden" />
+      <div id="r-nombre" class="nombre"></div>
+      <div id="r-precio" class="precio"></div>
+      <div class="vuelve"><i class="bi bi-arrow-repeat"></i> Volviendo para el próximo producto...</div>
+    </div>
+
+    <!-- Aviso (no encontrado / deshabilitado / error) -->
+    <div id="aviso" class="aviso hidden">
+      <i id="a-icono" class="bi bi-exclamation-circle icono"></i>
+      <h1 id="a-texto"></h1>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var API = window.location.origin + '/Stockify/api/v1';
+      var params = new URLSearchParams(window.location.search);
+      var sucursalId = params.get('sucursal');
+      var VUELTA_MS = 5000;
+
+      var elScan = document.getElementById('scan');
+      var elRes = document.getElementById('resultado');
+      var elAviso = document.getElementById('aviso');
+      var rImg = document.getElementById('r-img');
+      var rNombre = document.getElementById('r-nombre');
+      var rPrecio = document.getElementById('r-precio');
+      var aIcono = document.getElementById('a-icono');
+      var aTexto = document.getElementById('a-texto');
+      var elSucursal = document.getElementById('sucursal');
+
+      var habilitado = false;
+      var timer = null;
+
+      function money(n) {
+        try { return Number(n || 0).toLocaleString('es-UY', { style: 'currency', currency: 'UYU', minimumFractionDigits: 2 }); }
+        catch (e) { return '$ ' + Number(n || 0).toFixed(2); }
+      }
+      function show(el) { for (var e of [elScan, elRes, elAviso]) e.classList.add('hidden'); el.classList.remove('hidden'); }
+      function volverAEscanear() { if (timer) clearTimeout(timer); show(elScan); }
+      function programarVuelta() { if (timer) clearTimeout(timer); timer = setTimeout(volverAEscanear, VUELTA_MS); }
+
+      function mostrarProducto(p) {
+        rNombre.textContent = p.nombre || '';
+        rPrecio.textContent = money(p.precio);
+        if (p.imagen) { rImg.src = p.imagen; rImg.classList.remove('hidden'); }
+        else { rImg.classList.add('hidden'); rImg.removeAttribute('src'); }
+        show(elRes);
+        programarVuelta();
+      }
+      function mostrarAviso(texto, tipo) {
+        aTexto.textContent = texto;
+        elAviso.className = 'aviso ' + (tipo || 'warn');
+        aIcono.className = 'bi ' + (tipo === 'error' ? 'bi-wifi-off' : 'bi-search') + ' icono';
+        show(elAviso);
+        programarVuelta();
+      }
+
+      async function consultar(codigo) {
+        try {
+          var r = await fetch(API + '/productos/consulta/sucursal/' + encodeURIComponent(sucursalId) + '/codigo/' + encodeURIComponent(codigo));
+          if (r.status === 404) { mostrarAviso('Producto no encontrado', 'warn'); return; }
+          if (!r.ok) { mostrarAviso('No se pudo consultar', 'error'); return; }
+          var p = await r.json();
+          if (!p) { mostrarAviso('Producto no encontrado', 'warn'); return; }
+          mostrarProducto(p);
+        } catch (e) { mostrarAviso('Sin conexión con el servidor', 'error'); }
+      }
+
+      // Lector fisico: actua como teclado y termina con Enter. Se captura a nivel
+      // documento (no hace falta foco).
+      var buffer = '';
+      var ultima = 0;
+      document.addEventListener('keydown', function (e) {
+        if (!habilitado) return;
+        var ahora = Date.now();
+        if (ahora - ultima > 120) buffer = '';
+        ultima = ahora;
+        if (e.key === 'Enter') {
+          var code = buffer.trim(); buffer = '';
+          if (code.length >= 3) { e.preventDefault(); consultar(code); }
+          return;
+        }
+        if (e.key.length === 1) buffer += e.key;
+      });
+
+      // Arranque: valida sucursal y si la consulta esta habilitada.
+      (async function init() {
+        if (!sucursalId) { mostrarAvisoFijo('Falta la sucursal en la URL (?sucursal=ID)'); return; }
+        try {
+          var r = await fetch(API + '/productos/consulta/sucursal/' + encodeURIComponent(sucursalId));
+          if (!r.ok) { mostrarAvisoFijo('Sucursal no válida'); return; }
+          var info = await r.json();
+          elSucursal.textContent = info.sucursalNombre || '';
+          if (!info.habilitado) { mostrarAvisoFijo('La consulta de precios no está habilitada para esta sucursal'); return; }
+          habilitado = true;
+          show(elScan);
+        } catch (e) { mostrarAvisoFijo('Sin conexión con el servidor'); }
+      })();
+
+      // Aviso permanente (sin volver a escanear), para errores de configuracion.
+      function mostrarAvisoFijo(texto) {
+        aTexto.textContent = texto;
+        elAviso.className = 'aviso error';
+        aIcono.className = 'bi bi-exclamation-octagon icono';
+        show(elAviso);
+      }
+    })();
+  </script>
+</body>
+</html>

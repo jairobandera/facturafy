@@ -83,12 +83,37 @@ function formularioSucursal(suc) {
     lotesCheck, h('label', { class: 'form-check-label', for: 'cfg-lotes' }, 'Usar lotes (vencimientos)'),
   ]);
 
-  // Los lotes dependen del control de stock: si el paquete no incluye stock, no aplica.
-  function refrescarLotes() {
+  // ---- Consulta de precios (kiosko), depende del paquete de facturacion ----
+  const consultaCheck = h('input', { class: 'form-check-input', type: 'checkbox', id: 'cfg-consulta', checked: suc.usaConsultaPrecio === true });
+  const consultaWrap = h('div', { class: 'form-check' }, [
+    consultaCheck, h('label', { class: 'form-check-label', for: 'cfg-consulta' }, 'Habilitar consulta de precios (kiosko para clientes)'),
+  ]);
+  const urlKiosko = `${window.location.origin}/consulta.html?sucursal=${suc.id}`;
+  const urlInput = h('input', { class: 'form-control', type: 'text', readonly: true, value: urlKiosko });
+  const copiarBtn = h('button', { class: 'btn btn-outline-secondary', type: 'button' }, [h('i', { class: 'bi bi-clipboard' })]);
+  copiarBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(urlKiosko); ui.toast('Enlace copiado.'); } catch { urlInput.select(); }
+  });
+  const urlBox = h('div', { class: 'mt-2' }, [
+    h('label', { class: 'form-label small mb-1' }, 'Enlace del kiosko (abrilo en el dispositivo del local):'),
+    h('div', { class: 'input-group' }, [
+      urlInput, copiarBtn,
+      h('a', { class: 'btn btn-outline-primary', href: urlKiosko, target: '_blank', rel: 'noopener' }, [h('i', { class: 'bi bi-box-arrow-up-right' })]),
+    ]),
+  ]);
+
+  // Los lotes dependen del control de stock; la consulta de precios, de la facturacion.
+  function refrescar() {
     const stockOn = PAQUETES[paquete].usaStock;
     lotesCheck.disabled = !stockOn;
     if (!stockOn) lotesCheck.checked = false;
+
+    const facturacionOn = PAQUETES[paquete].usaFacturacion;
+    consultaCheck.disabled = !facturacionOn;
+    if (!facturacionOn) consultaCheck.checked = false;
+    urlBox.classList.toggle('d-none', !consultaCheck.checked);
   }
+  consultaCheck.addEventListener('change', () => urlBox.classList.toggle('d-none', !consultaCheck.checked));
 
   const radios = Object.entries({
     COMPLETO: 'Completo (facturación + control de stock)',
@@ -99,28 +124,30 @@ function formularioSucursal(suc) {
       class: 'form-check-input', type: 'radio', name: 'cfg-paquete', id: `pq-${value}`,
       value, checked: paquete === value,
     });
-    input.addEventListener('change', () => { if (input.checked) { paquete = value; refrescarLotes(); } });
+    input.addEventListener('change', () => { if (input.checked) { paquete = value; refrescar(); } });
     return h('div', { class: 'form-check' }, [input, h('label', { class: 'form-check-label', for: `pq-${value}` }, label)]);
   });
 
   const guardar = h('button', { class: 'btn btn-primary' }, [h('i', { class: 'bi bi-save me-1' }), 'Guardar cambios']);
   guardar.addEventListener('click', async () => {
     const flags = PAQUETES[paquete];
+    const usaConsultaPrecio = flags.usaFacturacion ? consultaCheck.checked : false;
     ui.loading('Guardando...');
     try {
       await api.put(`/sucursales/${suc.id}`, {
         usaStock: flags.usaStock,
         usaFacturacion: flags.usaFacturacion,
         usaLotes: flags.usaStock ? lotesCheck.checked : false,
+        usaConsultaPrecio,
       });
       // Refleja el cambio localmente para no perderlo si se vuelve a guardar.
-      Object.assign(suc, flags, { usaLotes: flags.usaStock ? lotesCheck.checked : false });
+      Object.assign(suc, flags, { usaLotes: flags.usaStock ? lotesCheck.checked : false, usaConsultaPrecio });
       ui.close();
       ui.success('Configuración guardada.');
     } catch (err) { ui.close(); ui.error(err.message); }
   });
 
-  refrescarLotes();
+  refrescar();
 
   return h('div', { class: 'sk-card p-4' }, [
     h('h5', { class: 'mb-1' }, suc.nombre),
@@ -129,6 +156,10 @@ function formularioSucursal(suc) {
     h('hr'),
     h('h6', { class: 'mb-2' }, 'Opciones de control de stock'),
     lotesWrap,
+    h('hr'),
+    h('h6', { class: 'mb-2' }, 'Facturación'),
+    consultaWrap,
+    urlBox,
     h('div', { class: 'mt-4' }, [guardar]),
   ]);
 }

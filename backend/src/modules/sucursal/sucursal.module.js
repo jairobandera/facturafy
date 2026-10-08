@@ -18,6 +18,8 @@ export const sucursalCrud = createCrud({
     //   usaStock -> control de stock (conteos), usaFacturacion -> facturacion.
     { col: 'usa_stock', field: 'usaStock', bool: true, default: true },
     { col: 'usa_facturacion', field: 'usaFacturacion', bool: true, default: false },
+    // Habilita la consulta de precios (kiosko) para el cliente. Requiere facturacion.
+    { col: 'usa_consulta_precio', field: 'usaConsultaPrecio', bool: true, default: false },
     // Limite de credito por defecto para cuentas nuevas (lo fija el administrador).
     { col: 'limite_credito_default', field: 'limiteCreditoDefault', default: 0 },
   ],
@@ -33,7 +35,8 @@ export const sucursalRoutes = sucursalCrud.buildRoutes((routes, { normalize }) =
   routes.get('/empresa/:empresaId', async (ctx, res) => {
     const rows = await query(
       `SELECT id, nombre, direccion, telefono, empresa_id AS empresaId,
-              usa_lotes AS usaLotes, usa_stock AS usaStock, usa_facturacion AS usaFacturacion, activo
+              usa_lotes AS usaLotes, usa_stock AS usaStock, usa_facturacion AS usaFacturacion,
+              usa_consulta_precio AS usaConsultaPrecio, activo
          FROM sucursal
         WHERE empresa_id = ? AND activo = 1
         ORDER BY nombre`,
