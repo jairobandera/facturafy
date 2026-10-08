@@ -4,6 +4,7 @@
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS cotizacion;
 DROP TABLE IF EXISTS cliente_movimiento;
 DROP TABLE IF EXISTS venta_detalle;
 DROP TABLE IF EXISTS venta;
@@ -37,6 +38,23 @@ CREATE TABLE empresa (
   direccion VARCHAR(255),
   telefono  VARCHAR(255),
   activo    BOOLEAN NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- COTIZACION (cambio de moneda por empresa) ----------------
+-- Cotizaciones manuales que carga el administrador, COMPARTIDAS por todas las
+-- sucursales de la empresa. `compra`/`venta` se expresan en PESOS URUGUAYOS por 1
+-- unidad de la moneda (ej. USD compra 40.0 = $40 por dolar). moneda: USD | ARS | EUR.
+-- Para cobrar una venta en otra moneda se usa `compra`; si una moneda no esta cargada,
+-- la app cae a la cotizacion en vivo de una API.
+CREATE TABLE cotizacion (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id  BIGINT NOT NULL,
+  moneda      VARCHAR(3) NOT NULL,            -- USD | ARS | EUR
+  compra      FLOAT NOT NULL DEFAULT 0,
+  venta       FLOAT NOT NULL DEFAULT 0,
+  actualizado DATETIME,
+  CONSTRAINT uk_cotizacion_empresa_moneda UNIQUE (empresa_id, moneda),
+  CONSTRAINT fk_cotizacion_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- SUCURSAL ----------------
@@ -334,6 +352,17 @@ CREATE TABLE venta (
   descuento            FLOAT NOT NULL DEFAULT 0,
   total                FLOAT NOT NULL DEFAULT 0,
   forma_pago           VARCHAR(20) NOT NULL DEFAULT 'CONTADO', -- CONTADO | CREDITO
+  -- Moneda de cobro. El total "oficial" (subtotal/total) SIEMPRE esta en UYU; cuando
+  -- se cobra en otra moneda se guardan aca la moneda, la cotizacion (UYU por 1 unidad)
+  -- y el total convertido. moneda_pago = UYU y cotizacion = 1 para la venta normal.
+  moneda_pago          VARCHAR(3) NOT NULL DEFAULT 'UYU',       -- UYU | USD | ARS | EUR
+  cotizacion           FLOAT NOT NULL DEFAULT 1,                -- UYU por 1 unidad de moneda_pago
+  total_moneda         FLOAT NOT NULL DEFAULT 0,                -- total en moneda_pago
+  -- Efectivo recibido y vuelto, en moneda_pago (para ventas al contado). NULL si no aplica.
+  efectivo_recibido    FLOAT,
+  vuelto               FLOAT,
+  -- Comentario opcional que el cajero agrega a pedido del cliente (sale en la boleta/correo).
+  comentario           VARCHAR(500),
   estado               VARCHAR(20) NOT NULL DEFAULT 'EMITIDA', -- EMITIDA | ANULADA
   motivo_anulacion     VARCHAR(500),
   fecha_anulacion      DATETIME,

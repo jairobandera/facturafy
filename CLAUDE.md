@@ -254,9 +254,11 @@ cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /
 `GET /:id/quincena?desde=&hasta=`, `POST /quincena/enviar`, `GET /correo/estado`),
 `/ventas` (`POST /`, `GET /sucursal/:id?desde=&hasta=&estado=`, `GET /turno/:turnoId`,
 `GET /cliente/:clienteId`, `GET /:id`, `POST /:id/anular`), `/turnos` (see Turnos below) and
-`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`). `/sucursales` adds the PIN
-management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3 active, value never
-returned) and carries `limiteCreditoDefault` in the CRUD (`PUT /sucursales/:id`).
+`/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`) and `/cotizaciones`
+(`GET /vivas?empresaId=`, `GET /venta?empresaId=&moneda=`, `GET|PUT /empresa/:empresaId`).
+`/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
+active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
+devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).
 
 ## Facturación (módulo nuevo de Facturafy)
 
@@ -322,6 +324,21 @@ El admin aplica **mora** (monto fijo o % del saldo) y registra **pagos**. **Cerr
 manda por **email** (SMTP vía `nodemailer`, `src/core/mailer.js`, config `SMTP_*` en `.env`) a uno,
 varios o todos los clientes; **no** modifica el saldo. El administrador también ve
 `#/admin/turnos` (historial + arqueo + cerrar) y `#/admin/configuracion` (PINes + límite por defecto).
+
+**Monedas, comentario y vuelto en la venta.** El total "oficial" (`venta.subtotal`/`total`) **siempre
+está en UYU**. Cuando se cobra en otra moneda se guardan `moneda_pago` (UYU|USD|ARS|EUR), `cotizacion`
+(UYU por 1 unidad) y `total_moneda` (= `total / cotizacion`); el crédito se fuerza a UYU. Las
+cotizaciones manuales son **por empresa** (tabla `cotizacion`, compra/venta en UYU por unidad), las
+carga el admin en Configuración. `cotizacion.module.js#paraVenta` resuelve la cotización de una venta
+(**admin `compra`; API en vivo si falta** — `open.er-api.com`, base UYU, cacheada 10 min) y
+`#paraConversor` la del conversor del cajero (**API; admin si falla**). `venta.efectivo_recibido` y
+`vuelto` (en `moneda_pago`) guardan el efectivo y el vuelto de las ventas al contado, y
+`venta.comentario` una nota del cajero que sale en la boleta (PDF) y en el email del estado de cuenta.
+
+**Correo SMTP por sucursal con respaldo.** Las credenciales viven en `sucursal.smtp_*` (las carga el
+superadmin en el form de sucursal; `smtp_pass` solo se devuelve al editar). `mailer.js#resolverSmtp`
+usa la casilla de la sucursal y, si no tiene, la global del `.env`. En `enviarQuincena`, si el envío
+con la casilla propia falla, **reintenta con el SMTP global del `.env`** como respaldo.
 
 **Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
 every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op

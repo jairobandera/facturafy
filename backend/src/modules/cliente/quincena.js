@@ -3,7 +3,7 @@
 // quincena" = generar y mandar estos estados de cuenta; NO modifica el saldo.
 import { query } from '../../config/db.js';
 import { badRequest } from '../../core/httpError.js';
-import { resolverSmtp, construirTransporter, enviarCon } from '../../core/mailer.js';
+import { resolverSmtp, construirTransporter, enviarCon, smtpEnv } from '../../core/mailer.js';
 import { cuentaService } from './cuenta.js';
 
 function money(n) {
@@ -20,7 +20,7 @@ async function ventasCreditoPeriodo(clienteId, desde, hasta) {
   if (desde) { where += ' AND fecha_hora >= ?'; params.push(`${desde} 00:00:00`); }
   if (hasta) { where += ' AND fecha_hora <= ?'; params.push(`${hasta} 23:59:59`); }
   const rows = await query(
-    `SELECT id, fecha_hora AS fechaHora, total FROM venta ${where} ORDER BY fecha_hora, id`,
+    `SELECT id, fecha_hora AS fechaHora, total, comentario FROM venta ${where} ORDER BY fecha_hora, id`,
     params
   );
   return rows.map((r) => ({ ...r, total: Number(r.total) }));
@@ -42,7 +42,7 @@ export function htmlEstadoCuenta(st, { desde, hasta, sucursalNombre } = {}) {
   const filasVentas = st.ventas.length
     ? st.ventas.map((v) => `<tr>
         <td style="padding:4px 8px;border-bottom:1px solid #eee">#${v.id}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #eee">${esc(String(v.fechaHora).replace('T', ' '))}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #eee">${esc(String(v.fechaHora).replace('T', ' '))}${v.comentario ? `<br><span style="color:#888;font-size:12px">${esc(v.comentario)}</span>` : ''}</td>
         <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${money(v.total)}</td>
       </tr>`).join('')
     : `<tr><td colspan="3" style="padding:8px;color:#777">Sin facturas a crédito en el período.</td></tr>`;
@@ -90,6 +90,11 @@ export async function enviarQuincena({ sucursalId, desde, hasta, clienteIds, usu
     throw badRequest('El envío de correo no está configurado para esta sucursal. Cargá el correo y la contraseña de aplicación en el formulario de la sucursal (superadmin), o configurá el SMTP global en el .env.');
   }
   const transporter = construirTransporter(smtp);
+  // Si la sucursal usa su propia casilla y hay un SMTP global en el .env, se prepara
+  // como respaldo: si falla el envio con el de la sucursal, se reintenta con el del .env.
+  const usaPropia = !!(sucRows[0]?.smtpUser && sucRows[0]?.smtpPass);
+  const respaldo = usaPropia ? smtpEnv() : null;
+  const transporterRespaldo = respaldo ? construirTransporter(respaldo) : null;
 
   let candidatos;
   if (Array.isArray(clienteIds) && clienteIds.length) {
@@ -109,15 +114,26 @@ export async function enviarQuincena({ sucursalId, desde, hasta, clienteIds, usu
     // Nada que cobrar ni mostrar: no se molesta al cliente.
     if (!st.ventas.length && st.saldo <= 0) { resultado.omitidos.push({ id: c.id, nombre }); continue; }
     if (!c.email) { resultado.sinEmail.push({ id: c.id, nombre }); continue; }
+    const mensaje = {
+      to: c.email,
+      subject: `Estado de cuenta - ${sucursalNombre}`,
+      html: htmlEstadoCuenta(st, { desde, hasta, sucursalNombre }),
+    };
     try {
-      await enviarCon(transporter, {
-        from: smtp.from,
-        to: c.email,
-        subject: `Estado de cuenta - ${sucursalNombre}`,
-        html: htmlEstadoCuenta(st, { desde, hasta, sucursalNombre }),
-      });
+      await enviarCon(transporter, { from: smtp.from, ...mensaje });
       resultado.enviados.push({ id: c.id, nombre, email: c.email });
     } catch (err) {
+      // Reintento con el correo por defecto del .env (si la sucursal usaba el propio).
+      if (transporterRespaldo) {
+        try {
+          await enviarCon(transporterRespaldo, { from: respaldo.from, ...mensaje });
+          resultado.enviados.push({ id: c.id, nombre, email: c.email, via: 'respaldo' });
+          continue;
+        } catch (err2) {
+          resultado.fallidos.push({ id: c.id, nombre, error: `${err.message} / respaldo: ${err2.message}` });
+          continue;
+        }
+      }
       resultado.fallidos.push({ id: c.id, nombre, error: err.message });
     }
   }

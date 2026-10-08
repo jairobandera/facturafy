@@ -4,6 +4,7 @@ import { assertUsaFacturacion } from '../sucursal/paquetes.js';
 import { emitirCFE } from '../facturacion/cfe.js';
 import { ventaRepository } from './venta.repository.js';
 import { saldoConConn, cargarVenta, revertirVenta } from '../cliente/cuenta.js';
+import { cotizacionService } from '../cotizacion/cotizacion.module.js';
 
 function money(n) {
   return Number(n || 0).toLocaleString('es-UY', { style: 'currency', currency: 'UYU', minimumFractionDigits: 2 });
@@ -73,6 +74,19 @@ export const ventaService = {
     const formaPago = dto.formaPago || 'CONTADO';
     if (!FORMAS_PAGO.includes(formaPago)) throw badRequest(`Forma de pago invalida: ${formaPago}`);
 
+    // Moneda de cobro. El credito siempre se registra en UYU (la deuda es en pesos).
+    // Se resuelve la cotizacion (UYU por 1 unidad): la del admin y, si falta, la de la API.
+    const monedaPago = formaPago === 'CREDITO' ? 'UYU' : String(dto.monedaPago || 'UYU').toUpperCase();
+    let cotizacion = 1;
+    if (monedaPago !== 'UYU') {
+      const empRows = await query(`SELECT empresa_id AS empresaId FROM sucursal WHERE id = ?`, [sucursalId]);
+      const empresaId = empRows[0]?.empresaId;
+      ({ cotizacion } = await cotizacionService.paraVenta(empresaId, monedaPago));
+    }
+    const comentario = dto.comentario ? String(dto.comentario).trim().slice(0, 500) : null;
+    const efectivoRecibido = (dto.efectivoRecibido != null && dto.efectivoRecibido !== '')
+      ? round2(dto.efectivoRecibido) : null;
+
     const id = await transaction(async (conn) => {
       const { clienteId, consumidorFinal, limiteCredito } = await resolverCliente(conn, dto, sucursalId);
       // Una venta a credito exige un cliente registrado (a quien cobrarle despues).
@@ -131,13 +145,26 @@ export const ventaService = {
         }
       }
 
+      // Total convertido a la moneda de cobro y, si es contado con efectivo, el vuelto.
+      const totalMoneda = round2(total / cotizacion);
+      let vuelto = null;
+      if (efectivoRecibido != null) {
+        if (efectivoRecibido < totalMoneda) {
+          throw badRequest(`El efectivo recibido (${efectivoRecibido}) es menor al total a pagar (${totalMoneda} ${monedaPago}).`);
+        }
+        vuelto = round2(efectivoRecibido - totalMoneda);
+      }
+
       const [res] = await conn.execute(
         `INSERT INTO venta
            (fecha_hora, sucursal_id, turno_id, usuario_id, cliente_id, consumidor_final,
-            subtotal, descuento, total, forma_pago, estado, activo, cfe_estado)
-         VALUES (?,?,?,?,?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
+            subtotal, descuento, total, forma_pago,
+            moneda_pago, cotizacion, total_moneda, efectivo_recibido, vuelto, comentario,
+            estado, activo, cfe_estado)
+         VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
         [nowDateTime(), sucursalId, turnoId, dto.usuarioId ?? null, clienteId, consumidorFinal ? 1 : 0,
-         subtotal, descuento, total, formaPago]
+         subtotal, descuento, total, formaPago,
+         monedaPago, cotizacion, totalMoneda, efectivoRecibido, vuelto, comentario]
       );
       const ventaId = res.insertId;
 

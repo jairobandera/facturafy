@@ -41,6 +41,12 @@ INSERT INTO sucursal_pin (id, sucursal_id, pin, etiqueta) VALUES
   (1, 1, ${q('1234')}, ${q('Supervisor')}),
   (2, 1, ${q('9999')}, ${q('Encargado')});
 
+-- Cotizaciones de ejemplo (compra/venta en pesos uruguayos por 1 unidad), por empresa.
+INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
+  (1, ${q('USD')}, 40, 41, NOW()),
+  (1, ${q('ARS')}, 0.03, 0.035, NOW()),
+  (1, ${q('EUR')}, 44, 46, NOW());
+
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES

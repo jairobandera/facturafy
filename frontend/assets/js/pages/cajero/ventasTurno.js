@@ -95,6 +95,9 @@ export async function ventasTurnoPage() {
           <div><b>Hora:</b> ${esc(fmt.dateTime(v.fechaHora))}</div>
           <div><b>Cliente:</b> ${quien}</div>
           <div><b>Forma de pago:</b> ${v.formaPago === 'CREDITO' ? 'Crédito' : 'Contado'}</div>
+          ${v.monedaPago && v.monedaPago !== 'UYU' ? `<div><b>Moneda:</b> ${esc(v.monedaPago)} · Total ${esc(v.monedaPago)} ${esc(Number(v.totalMoneda).toFixed(2))}</div>` : ''}
+          ${v.efectivoRecibido != null ? `<div><b>Paga con:</b> ${esc(Number(v.efectivoRecibido).toFixed(2))} · <b>Vuelto:</b> ${esc(Number(v.vuelto || 0).toFixed(2))}</div>` : ''}
+          ${v.comentario ? `<div><b>Comentario:</b> ${esc(v.comentario)}</div>` : ''}
         </div>
         <div class="table-responsive"><table class="table table-sm">
           <thead><tr><th class="text-start">Producto</th><th class="text-center">Cant.</th>

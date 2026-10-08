@@ -18,6 +18,7 @@ import { estadisticaRoutes } from './modules/estadistica/estadistica.module.js';
 import { clienteRoutes } from './modules/cliente/cliente.module.js';
 import { ventaRoutes } from './modules/venta/venta.routes.js';
 import { turnoRoutes } from './modules/turno/turno.routes.js';
+import { cotizacionRoutes } from './modules/cotizacion/cotizacion.module.js';
 import { estadisticaVentaRoutes } from './modules/estadisticaVenta/estadisticaVenta.module.js';
 
 export function buildApiRouter() {
@@ -40,6 +41,7 @@ export function buildApiRouter() {
   api.use('/clientes', clienteRoutes);
   api.use('/ventas', ventaRoutes);
   api.use('/turnos', turnoRoutes);
+  api.use('/cotizaciones', cotizacionRoutes);
   api.use('/estadisticas-venta', estadisticaVentaRoutes);
   return api;
 }

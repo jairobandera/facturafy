@@ -11,7 +11,7 @@ import { renderShell } from '../../core/layout.js';
 import { router } from '../../core/router.js';
 import { pageHeader, spinner } from '../../components/page.js';
 import { manualSearch, findByCode } from '../../components/barcode.js';
-import { sucursalActiva } from '../../core/sucursal.js';
+import { sucursalActiva, sucursalActual } from '../../core/sucursal.js';
 import { cargarTurnoActivo, soyMiembro } from '../../core/turno.js';
 import { resolveUsuarioId } from '../shared/session.js';
 import { onCleanup } from '../../core/lifecycle.js';
@@ -53,8 +53,14 @@ export async function posPage() {
   const carrito = new Map(); // productoId -> { producto, cantidad }
   let cliente = null;        // null = consumidor final
   let formaPago = 'CONTADO';
+  let moneda = 'UYU';        // moneda de cobro
+  let cotizacion = 1;        // UYU por 1 unidad de `moneda`
+  const empresaId = sucursalActual()?.empresaId;
 
-  content.append(pageHeader('Punto de venta', `Turno ${turno.numeroLabel} · pasá un producto por el lector o buscalo.`));
+  content.append(pageHeader('Punto de venta', `Turno ${turno.numeroLabel} · pasá un producto por el lector o buscalo.`, [
+    h('button', { class: 'btn btn-outline-secondary', onClick: () => abrirConversor(empresaId) },
+      [h('i', { class: 'bi bi-currency-exchange me-1' }), 'Conversor']),
+  ]));
 
   // ---- Boton de alta (solo busqueda manual: el escaneo con camara se quito, se usa
   //      el lector fisico que ya funciona via el listener de teclado de abajo) ----
@@ -96,22 +102,77 @@ export async function posPage() {
   // ---- Totales + facturar ----
   const subtotalEl = h('span', { class: 'fw-semibold' }, fmt.money(0));
   const totalEl = h('span', { class: 'fs-4 fw-bold' }, fmt.money(0));
-  const pagoSelect = h('select', { class: 'form-select w-auto', onChange: (e) => { formaPago = e.target.value; } }, [
+  const cotizInfo = h('div', { class: 'text-muted small mb-2 d-none' });
+  const pagoSelect = h('select', { class: 'form-select w-auto' }, [
     h('option', { value: 'CONTADO', selected: true }, 'Contado'),
     h('option', { value: 'CREDITO' }, 'Crédito'),
   ]);
+  const monedaSelect = h('select', { class: 'form-select w-auto' }, [
+    h('option', { value: 'UYU', selected: true }, 'Pesos (UYU)'),
+    h('option', { value: 'USD' }, 'Dólares (USD)'),
+    h('option', { value: 'ARS' }, 'Pesos arg. (ARS)'),
+    h('option', { value: 'EUR' }, 'Euros (EUR)'),
+  ]);
+  const pagaConInput = h('input', { class: 'form-control w-auto', type: 'number', min: 0, step: '0.01', placeholder: '0.00' });
+  const vueltoEl = h('span', { class: 'fw-semibold' }, fmt.money(0));
+  const pagaConRow = h('div', { class: 'd-flex align-items-center justify-content-between gap-2 mb-1' }, [
+    h('label', { class: 'text-muted' }, 'Paga con'), pagaConInput,
+  ]);
+  const vueltoRow = h('div', { class: 'd-flex align-items-center justify-content-between mb-3' }, [
+    h('span', {}, 'Vuelto'), vueltoEl,
+  ]);
+  const comentarioInput = h('textarea', { class: 'form-control', rows: 2, placeholder: 'Comentario (opcional, sale en la boleta)' });
+
+  pagoSelect.addEventListener('change', (e) => {
+    formaPago = e.target.value;
+    // El crédito se registra siempre en pesos (la deuda es en UYU).
+    if (formaPago === 'CREDITO') { monedaSelect.value = 'UYU'; onMonedaChange('UYU'); }
+    monedaSelect.disabled = formaPago === 'CREDITO';
+    actualizarVistaPago();
+  });
+  monedaSelect.addEventListener('change', (e) => onMonedaChange(e.target.value));
+  pagaConInput.addEventListener('input', actualizarTotales);
+
   const facturarBtn = h('button', { class: 'btn btn-success btn-lg w-100 py-3 d-flex align-items-center justify-content-center gap-2' },
     [h('i', { class: 'bi bi-receipt', style: { fontSize: '1.3rem' } }), 'Facturar']);
   facturarBtn.addEventListener('click', facturar);
 
   const totalesCard = h('div', { class: 'sk-card p-3' }, [
     h('div', { class: 'd-flex justify-content-between mb-1' }, [h('span', { class: 'text-muted' }, 'Subtotal'), subtotalEl]),
-    h('div', { class: 'd-flex justify-content-between align-items-center mb-3' }, [h('span', {}, 'Total'), totalEl]),
-    h('div', { class: 'd-flex align-items-center gap-2 mb-3' }, [
+    h('div', { class: 'd-flex justify-content-between align-items-center mb-1' }, [h('span', {}, 'Total'), totalEl]),
+    cotizInfo,
+    h('div', { class: 'd-flex align-items-center justify-content-between gap-2 mb-2' }, [
       h('label', { class: 'text-muted' }, 'Forma de pago'), pagoSelect,
     ]),
+    h('div', { class: 'd-flex align-items-center justify-content-between gap-2 mb-2' }, [
+      h('label', { class: 'text-muted' }, 'Moneda de cobro'), monedaSelect,
+    ]),
+    pagaConRow,
+    vueltoRow,
+    h('div', { class: 'mb-3' }, [comentarioInput]),
     facturarBtn,
   ]);
+
+  // Cambia la moneda de cobro: trae la cotización (admin; API si falta) y recalcula.
+  async function onMonedaChange(nueva) {
+    moneda = nueva;
+    if (moneda === 'UYU') { cotizacion = 1; actualizarTotales(); return; }
+    try {
+      const r = await api.get(`/cotizaciones/venta?empresaId=${empresaId}&moneda=${moneda}`);
+      cotizacion = Number(r.cotizacion) || 1;
+    } catch (err) {
+      ui.error(err.message);
+      moneda = 'UYU'; monedaSelect.value = 'UYU'; cotizacion = 1;
+    }
+    actualizarTotales();
+  }
+
+  // Muestra/oculta "paga con" y "vuelto" (solo contado).
+  function actualizarVistaPago() {
+    const contado = formaPago === 'CONTADO';
+    pagaConRow.classList.toggle('d-none', !contado);
+    vueltoRow.classList.toggle('d-none', !contado);
+  }
 
   // Cliente arriba a la izquierda y totales arriba a la derecha; abajo, busqueda y carrito.
   content.append(
@@ -125,6 +186,7 @@ export async function posPage() {
 
   renderCarrito();
   renderCliente();
+  actualizarVistaPago();
 
   // Lector de codigo de barra FISICO: funciona como un teclado que "tipea" el codigo
   // muy rapido y termina con Enter. Lo capturamos a nivel documento para que, estando
@@ -215,9 +277,20 @@ export async function posPage() {
   }
 
   function actualizarTotales() {
-    const total = totalVenta();
+    const total = totalVenta();                                   // UYU
+    const totalMoneda = moneda === 'UYU' ? total : round2(total / cotizacion);
     subtotalEl.textContent = fmt.money(total);
-    totalEl.textContent = fmt.money(total);
+    totalEl.textContent = fmtMon(totalMoneda, moneda);
+    if (moneda === 'UYU') {
+      cotizInfo.classList.add('d-none'); cotizInfo.textContent = '';
+    } else {
+      cotizInfo.classList.remove('d-none');
+      cotizInfo.textContent = `1 ${moneda} = ${fmt.money(cotizacion)} · Total en pesos: ${fmt.money(total)}`;
+    }
+    const pagaCon = Number(pagaConInput.value);
+    vueltoEl.textContent = (formaPago === 'CONTADO' && Number.isFinite(pagaCon) && pagaCon > 0)
+      ? fmtMon(Math.max(0, round2(pagaCon - totalMoneda)), moneda)
+      : fmtMon(0, moneda);
     facturarBtn.disabled = carrito.size === 0;
   }
 
@@ -280,17 +353,28 @@ export async function posPage() {
       if (!cliente) return; // sigue sin cliente: no se puede facturar a credito
     }
 
-    const total = totalVenta();
+    const total = totalVenta();                                       // UYU
+    const totalMoneda = moneda === 'UYU' ? total : round2(total / cotizacion);
+    const pagaCon = Number(pagaConInput.value);
+    // Validación inmediata del efectivo (el backend igual lo revalida).
+    if (formaPago === 'CONTADO' && pagaConInput.value !== '' && Number.isFinite(pagaCon) && pagaCon < totalMoneda) {
+      ui.error(`El efectivo (${fmtMon(pagaCon, moneda)}) es menor al total (${fmtMon(totalMoneda, moneda)}).`);
+      return;
+    }
     const quien = cliente ? (cliente.razonSocial || cliente.nombreFantasia) : 'Consumidor final';
+    const lineaMoneda = moneda === 'UYU' ? '' : `\nEn ${moneda}: ${fmtMon(totalMoneda, moneda)} (1 ${moneda} = ${fmt.money(cotizacion)})`;
     const ok = await ui.confirm(
-      `Total: ${fmt.money(total)}\nCliente: ${quien}\nPago: ${formaPago === 'CREDITO' ? 'Crédito' : 'Contado'}`,
+      `Total: ${fmt.money(total)}${lineaMoneda}\nCliente: ${quien}\nPago: ${formaPago === 'CREDITO' ? 'Crédito' : 'Contado'}`,
       { title: '¿Confirmar venta?', confirmText: 'Sí, facturar', danger: false });
     if (!ok) return;
 
     ui.loading('Registrando venta...');
     try {
+      const efectivoRecibido = (formaPago === 'CONTADO' && pagaConInput.value !== '' && Number.isFinite(pagaCon) && pagaCon > 0)
+        ? pagaCon : null;
       const venta = await api.post('/ventas', {
         sucursalId, turnoId: turno.id, usuarioId, clienteId: cliente?.id ?? null, formaPago,
+        monedaPago: moneda, efectivoRecibido, comentario: comentarioInput.value.trim() || null,
         items: [...carrito.values()].map(({ producto, cantidad }) => ({ productoId: producto.id, cantidad })),
       });
       ui.close();
@@ -302,6 +386,9 @@ export async function posPage() {
       cliente = null;
       formaPago = 'CONTADO';
       pagoSelect.value = 'CONTADO';
+      moneda = 'UYU'; monedaSelect.value = 'UYU'; monedaSelect.disabled = false; cotizacion = 1;
+      pagaConInput.value = ''; comentarioInput.value = '';
+      actualizarVistaPago();
       renderCarrito();
       renderCliente();
       await ofrecerComprobante(venta);
@@ -396,6 +483,66 @@ function esc(value) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+
+/** Formatea un monto en una moneda (UYU usa el formateo de pesos; el resto, código + número). */
+function fmtMon(n, moneda) {
+  if (moneda === 'UYU') return fmt.money(n);
+  return `${moneda} ${Number(n || 0).toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+const NOMBRE_MONEDA = { UYU: 'Pesos (UYU)', USD: 'Dólares (USD)', ARS: 'Pesos arg. (ARS)', EUR: 'Euros (EUR)' };
+
+/**
+ * Conversor rápido de monedas. Usa la cotización EN VIVO (API) y, si falla, la del
+ * administrador. Las tasas vienen en UYU por 1 unidad de cada moneda.
+ */
+async function abrirConversor(empresaId) {
+  ui.loading('Cargando cotizaciones...');
+  let data;
+  try { data = await api.get(`/cotizaciones/vivas?empresaId=${empresaId ?? ''}`); }
+  catch (err) { ui.close(); ui.error(err.message); return; }
+  ui.close();
+
+  const rates = { UYU: 1, ...(data.rates || {}) };          // UYU por 1 unidad
+  const monedas = Object.keys(rates);
+  if (monedas.length <= 1) { ui.error('No hay cotizaciones disponibles (sin internet ni cotización del admin).'); return; }
+
+  const opt = (sel) => monedas.map((m) => `<option value="${m}"${m === sel ? ' selected' : ''}>${esc(NOMBRE_MONEDA[m] || m)}</option>`).join('');
+  const fuente = data.fuente === 'vivo' ? 'cotización en vivo' : 'cotización del administrador';
+
+  Swal.fire({
+    title: 'Conversor de monedas',
+    html: `
+      <div class="text-start">
+        <input id="cv-monto" type="number" min="0" step="0.01" class="form-control mb-2" placeholder="Monto" value="1" />
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <select id="cv-de" class="form-select">${opt('USD')}</select>
+          <i class="bi bi-arrow-right"></i>
+          <select id="cv-a" class="form-select">${opt('UYU')}</select>
+        </div>
+        <div id="cv-res" class="fs-5 fw-bold text-center py-2"></div>
+        <div class="text-muted small text-center">Fuente: ${esc(fuente)}</div>
+      </div>`,
+    showConfirmButton: false, showCancelButton: true, cancelButtonText: 'Cerrar', cancelButtonColor: '#64748b',
+    didOpen: () => {
+      const monto = document.getElementById('cv-monto');
+      const de = document.getElementById('cv-de');
+      const a = document.getElementById('cv-a');
+      const res = document.getElementById('cv-res');
+      const calc = () => {
+        const m = Number(monto.value);
+        if (!Number.isFinite(m)) { res.textContent = '—'; return; }
+        const enUyu = m * rates[de.value];            // a pesos
+        const out = enUyu / rates[a.value];           // a la moneda destino
+        res.textContent = `${fmtMon(m, de.value)} = ${fmtMon(round2(out), a.value)}`;
+      };
+      [monto, de, a].forEach((el) => el.addEventListener('input', calc));
+      calc();
+    },
+  });
+}
+
 /** Comprobante interno en PDF (jsPDF + autotable, ya cargados por CDN). */
 function generarComprobantePDF(venta) {
   const { jsPDF } = window.jspdf;
@@ -419,12 +566,18 @@ function generarComprobantePDF(venta) {
     styles: { fontSize: 9 },
     headStyles: { fillColor: [37, 99, 235] },
   });
-  const y = (doc.lastAutoTable?.finalY || 60) + 10;
+  let y = (doc.lastAutoTable?.finalY || 60) + 10;
   doc.setFontSize(12);
   doc.text(`TOTAL: ${fmt.money(venta.total)}`, 14, y);
-  if (venta.cfeEstado && venta.cfeEstado !== 'INTERNO') {
-    doc.setFontSize(9);
-    doc.text(`CFE: ${venta.cfeEstado}`, 14, y + 8);
+  doc.setFontSize(10);
+  // Cobro en otra moneda + efectivo/vuelto + comentario.
+  if (venta.monedaPago && venta.monedaPago !== 'UYU') {
+    y += 7; doc.text(`Cobrado en ${venta.monedaPago}: ${fmtMon(venta.totalMoneda, venta.monedaPago)} (1 ${venta.monedaPago} = ${fmt.money(venta.cotizacion)})`, 14, y);
   }
+  if (venta.efectivoRecibido != null) {
+    y += 6; doc.text(`Paga con: ${fmtMon(venta.efectivoRecibido, venta.monedaPago)}  ·  Vuelto: ${fmtMon(venta.vuelto || 0, venta.monedaPago)}`, 14, y);
+  }
+  if (venta.comentario) { y += 6; doc.text(`Comentario: ${venta.comentario}`, 14, y); }
+  if (venta.cfeEstado && venta.cfeEstado !== 'INTERNO') { y += 6; doc.setFontSize(9); doc.text(`CFE: ${venta.cfeEstado}`, 14, y); }
   doc.save(`venta-${venta.id}.pdf`);
 }

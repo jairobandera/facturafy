@@ -32,7 +32,7 @@ export function configuracionFacturacionPage() {
         api.get(`/sucursales/${sucursalId}/smtp`).catch(() => ({ configurado: false })),
       ]);
       clear(panel);
-      panel.append(bloqueLimite(sucursalId, sucursal), bloquePines(sucursalId, pines), bloqueCorreo(correo));
+      panel.append(bloqueLimite(sucursalId, sucursal), bloqueCotizaciones(sucursal.empresaId), bloquePines(sucursalId, pines), bloqueCorreo(correo));
     } catch (err) {
       clear(panel);
       panel.append(h('div', { class: 'alert alert-danger' }, `Error: ${err.message}`));
@@ -140,6 +140,44 @@ export function configuracionFacturacionPage() {
       lista,
       addBtn,
     ]);
+  }
+
+  // ---- Cotizaciones de moneda (compartidas por la empresa) ----
+  function bloqueCotizaciones(empresaId) {
+    const card = h('div', { class: 'sk-card p-4 mb-3' }, [
+      h('h6', { class: 'mb-1' }, 'Cotizaciones de moneda'),
+      h('p', { class: 'text-muted small mb-2' }, 'Compra/venta en pesos uruguayos por 1 unidad (ej. USD compra 40 = $40 por dólar). Son compartidas por todas las sucursales de la empresa. Si una moneda queda en 0, el POS usa la cotización en vivo de internet.'),
+    ]);
+    const cuerpo = h('div');
+    card.append(cuerpo, h('div', { class: 'text-muted small mt-2' }, 'Cargando...'));
+
+    (async () => {
+      let data;
+      try { data = await api.get(`/cotizaciones/empresa/${empresaId}`); }
+      catch (err) { clear(cuerpo); cuerpo.append(h('div', { class: 'alert alert-danger' }, err.message)); return; }
+      card.lastChild.remove(); // "Cargando..."
+      const inputs = {};
+      const fila = (m, label) => {
+        const compra = h('input', { class: 'form-control', type: 'number', min: 0, step: '0.01', value: data[m]?.compra ?? 0 });
+        const venta = h('input', { class: 'form-control', type: 'number', min: 0, step: '0.01', value: data[m]?.venta ?? 0 });
+        inputs[m] = { compra, venta };
+        return h('div', { class: 'row g-2 align-items-center mb-2' }, [
+          h('div', { class: 'col-4 col-md-3 fw-semibold' }, label),
+          h('div', { class: 'col' }, [h('label', { class: 'form-label small mb-0' }, 'Compra'), compra]),
+          h('div', { class: 'col' }, [h('label', { class: 'form-label small mb-0' }, 'Venta'), venta]),
+        ]);
+      };
+      const guardar = h('button', { class: 'btn btn-primary mt-2' }, [h('i', { class: 'bi bi-save me-1' }), 'Guardar cotizaciones']);
+      guardar.addEventListener('click', async () => {
+        const items = Object.entries(inputs).map(([moneda, el]) => ({ moneda, compra: Number(el.compra.value) || 0, venta: Number(el.venta.value) || 0 }));
+        ui.loading('Guardando...');
+        try { await api.put(`/cotizaciones/empresa/${empresaId}`, { items }); ui.close(); ui.success('Cotizaciones guardadas.'); }
+        catch (err) { ui.close(); ui.error(err.message); }
+      });
+      cuerpo.append(fila('USD', 'Dólar (USD)'), fila('ARS', 'Peso arg. (ARS)'), fila('EUR', 'Euro (EUR)'), guardar);
+    })();
+
+    return card;
   }
 
   function bloqueCorreo(correo) {

@@ -75,6 +75,13 @@ async function seed(conn) {
     [sucursalId, '1234', 'Supervisor', sucursalId, '9999', 'Encargado']
   );
 
+  // Cotizaciones de ejemplo (compra/venta en pesos uruguayos por 1 unidad), por empresa.
+  await conn.query(
+    `INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
+       (?,?,?,?,NOW()), (?,?,?,?,NOW()), (?,?,?,?,NOW())`,
+    [empresaId, 'USD', 40, 41, empresaId, 'ARS', 0.03, 0.035, empresaId, 'EUR', 44, 46]
+  );
+
   // Usuarios
   const pass = await hashPassword('12345');
   await conn.query(

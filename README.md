@@ -46,6 +46,11 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
   - Cliente por defecto **consumidor final**, o un **cliente registrado** elegido con buscador. Las
     ventas a **crédito** exigen un cliente registrado y respetan su **límite de crédito**.
   - Pago **contado** o **crédito**. Al facturar se registra la venta y **se descuenta el stock**.
+  - **Multimoneda**: se puede cobrar en **USD / ARS / EUR** (el total se convierte con la cotización
+    del comercio; si esa moneda no está cargada, usa la cotización en vivo). La venta se registra con
+    el total en pesos **y** el monto en la moneda cobrada. **Conversor rápido** de monedas integrado.
+  - **Vuelto**: se ingresa con cuánto paga el cliente y el POS calcula el **vuelto**.
+  - **Comentario** opcional en la venta (sale en la boleta y en el email del estado de cuenta).
   - **Comprobante en PDF**.
 - **Ventas del turno** (cajero): lista las ventas de su turno y permite **eliminarlas/anularlas**
   ingresando **motivo + PIN** de autorización de un supervisor (devuelve el stock).
@@ -57,8 +62,9 @@ Nació como evolución de **Stockify 2.0** (control de stock) sobre el mismo sta
   **mora** (monto fijo o % del saldo), editar el **límite** y **enviar el estado de cuenta** por email.
 - **Cierre de quincena**: envía por **email** (SMTP propio de la sucursal) el **estado de cuenta**
   (facturas del período + saldo a pagar) a **uno, varios o todos** los clientes.
-- **Configuración** (administrador): **PINes de anulación** (hasta 3 por sucursal) y **límite de
-  crédito por defecto** para las cuentas nuevas.
+- **Configuración** (administrador): **PINes de anulación** (hasta 3 por sucursal), **límite de
+  crédito por defecto** para las cuentas nuevas y **cotizaciones** de USD/ARS/EUR (compra/venta,
+  compartidas por la empresa).
 - **Estadísticas de facturación**: total facturado, contado vs crédito, ventas anuladas y productos
   más vendidos (separadas de las estadísticas de conteos).
 - **Factura electrónica de Uruguay (DGI/CFE)**: **preparada** (columnas, variables de entorno y un
@@ -176,9 +182,10 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `007-turnos-y-anulacion.sql` — turnos de caja.
 > - `008-pines-y-cuenta-corriente.sql` — PINes de anulación, cuenta corriente y límites de crédito.
 > - `009-smtp-por-sucursal.sql` — credenciales de correo por sucursal.
+> - `010-monedas-comentario-vuelto.sql` — cotizaciones de moneda, comentario y vuelto en la venta.
 >
 > ```bash
-> mysql -u <usuario> -p facturafy < backend/sql/migrations/009-smtp-por-sucursal.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/010-monedas-comentario-vuelto.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente
@@ -256,9 +263,9 @@ Recursos de stock: `/seguridad/login`, `/usuarios`, `/empresas`, `/sucursales`, 
 
 Recursos de facturación: `/clientes` (CRUD + cuenta corriente: `/:id/cuenta`, `/:id/pagos`,
 `/:id/mora`, `/:id/limite`, `/quincena/enviar`), `/ventas` (incluye `/turno/:id` y `/cliente/:id`),
-`/turnos` (abrir, unirse, cerrar, reporte de arqueo) y `/estadisticas-venta`. `/sucursales` suma la
-gestión de **PINes** (`/:id/pines`) y de **correo SMTP** (`/:id/smtp`, la contraseña nunca se expone
-salvo al editar la sucursal).
+`/turnos` (abrir, unirse, cerrar, reporte de arqueo), `/cotizaciones` (cambio en vivo + manual por
+empresa) y `/estadisticas-venta`. `/sucursales` suma la gestión de **PINes** (`/:id/pines`) y de
+**correo SMTP** (`/:id/smtp`, la contraseña nunca se expone salvo al editar la sucursal).
 
 ## Notas
 
@@ -272,3 +279,6 @@ salvo al editar la sucursal).
   de cada sucursal (superadmin), o un SMTP global en el `.env`. Contraseñas de aplicación de Gmail:
   **https://myaccount.google.com/apppasswords**. El `.env` (y por lo tanto las credenciales globales)
   **no** se sube al repositorio.
+- **Cotización en vivo**: el conversor del cajero y la conversión de ventas (cuando falta la
+  cotización manual) usan `open.er-api.com` (gratis, sin API key), así que el servidor necesita
+  **internet**. Si no hay, se usan las **cotizaciones manuales** cargadas por el administrador.

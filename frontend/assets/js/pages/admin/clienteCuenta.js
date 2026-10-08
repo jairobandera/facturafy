@@ -244,6 +244,8 @@ function verDetalle(v, c) {
       <div class="text-start small mb-2">
         <div><b>Fecha:</b> ${esc(fmt.dateTime(v.fechaHora))}</div>
         <div><b>Forma de pago:</b> ${v.formaPago === 'CREDITO' ? 'Crédito' : 'Contado'}</div>
+        ${v.monedaPago && v.monedaPago !== 'UYU' ? `<div><b>Moneda:</b> ${esc(v.monedaPago)} · Total ${esc(v.monedaPago)} ${esc(Number(v.totalMoneda).toFixed(2))}</div>` : ''}
+        ${v.comentario ? `<div><b>Comentario:</b> ${esc(v.comentario)}</div>` : ''}
       </div>
       <div class="table-responsive"><table class="table table-sm">
         <thead><tr><th class="text-start">Producto</th><th class="text-center">Cant.</th>
@@ -272,8 +274,11 @@ function boletaPDF(v, c) {
     body: (v.detalles || []).map((d) => [d.codigoProducto || '', d.nombre || '', d.cantidad, fmt.money(d.precioUnitario), fmt.money(d.subtotal)]),
     styles: { fontSize: 9 }, headStyles: { fillColor: [37, 99, 235] },
   });
-  const y = (doc.lastAutoTable?.finalY || 60) + 10;
+  let y = (doc.lastAutoTable?.finalY || 60) + 10;
   doc.setFontSize(12); doc.text(`TOTAL: ${fmt.money(v.total)}`, 14, y);
   if (v.estado === 'ANULADA') { doc.setTextColor(220, 38, 38); doc.text('ANULADA', 150, y); doc.setTextColor(0, 0, 0); }
+  doc.setFontSize(10);
+  if (v.monedaPago && v.monedaPago !== 'UYU') { y += 7; doc.text(`Cobrado en ${v.monedaPago}: ${v.monedaPago} ${Number(v.totalMoneda).toFixed(2)} (1 ${v.monedaPago} = ${fmt.money(v.cotizacion)})`, 14, y); }
+  if (v.comentario) { y += 6; doc.text(`Comentario: ${v.comentario}`, 14, y); }
   doc.save(`boleta-${v.id}.pdf`);
 }
