@@ -7,19 +7,20 @@ import { ui } from '../../core/ui.js';
 import { renderShell } from '../../core/layout.js';
 import { pageHeader, spinner } from '../../components/page.js';
 
-// Presets de paquete -> flags.
+// Presets de paquete (stock / facturacion). El envio de correos es un agregado
+// independiente (checkbox), para poder combinarlo: p.ej. "solo stock + envio de correos".
 const PAQUETES = {
-  COMPLETO: { usaStock: true, usaFacturacion: true, usaEnvioCorreos: false },
-  SOLO_FACTURACION: { usaStock: false, usaFacturacion: true, usaEnvioCorreos: false },
-  SOLO_STOCK: { usaStock: true, usaFacturacion: false, usaEnvioCorreos: false },
-  SOLO_CORREOS: { usaStock: false, usaFacturacion: false, usaEnvioCorreos: true },
+  COMPLETO: { usaStock: true, usaFacturacion: true },
+  SOLO_FACTURACION: { usaStock: false, usaFacturacion: true },
+  SOLO_STOCK: { usaStock: true, usaFacturacion: false },
+  NINGUNO: { usaStock: false, usaFacturacion: false },
 };
 
 function paqueteDe(suc) {
-  if (suc.usaEnvioCorreos && !suc.usaStock && !suc.usaFacturacion) return 'SOLO_CORREOS';
   if (suc.usaStock && suc.usaFacturacion) return 'COMPLETO';
   if (!suc.usaStock && suc.usaFacturacion) return 'SOLO_FACTURACION';
-  return 'SOLO_STOCK';
+  if (suc.usaStock && !suc.usaFacturacion) return 'SOLO_STOCK';
+  return 'NINGUNO';
 }
 
 export async function configuraciones() {
@@ -104,6 +105,12 @@ function formularioSucursal(suc) {
     ]),
   ]);
 
+  // ---- Envio de correos: agregado INDEPENDIENTE, combinable con cualquier paquete ----
+  const correosCheck = h('input', { class: 'form-check-input', type: 'checkbox', id: 'cfg-correos', checked: suc.usaEnvioCorreos === true });
+  const correosWrap = h('div', { class: 'form-check' }, [
+    correosCheck, h('label', { class: 'form-check-label', for: 'cfg-correos' }, 'Habilitar envío de correos (automatizar quincenas por Excel)'),
+  ]);
+
   // Los lotes dependen del control de stock; la consulta de precios, de la facturacion.
   function refrescar() {
     const stockOn = PAQUETES[paquete].usaStock;
@@ -121,7 +128,7 @@ function formularioSucursal(suc) {
     COMPLETO: 'Completo (facturación + control de stock)',
     SOLO_FACTURACION: 'Solo facturación',
     SOLO_STOCK: 'Solo control de stock',
-    SOLO_CORREOS: 'Solo envío de correos (automatizar quincenas por Excel)',
+    NINGUNO: 'Sin stock ni facturación',
   }).map(([value, label]) => {
     const input = h('input', {
       class: 'form-check-input', type: 'radio', name: 'cfg-paquete', id: `pq-${value}`,
@@ -135,17 +142,18 @@ function formularioSucursal(suc) {
   guardar.addEventListener('click', async () => {
     const flags = PAQUETES[paquete];
     const usaConsultaPrecio = flags.usaFacturacion ? consultaCheck.checked : false;
+    const usaEnvioCorreos = correosCheck.checked;
     ui.loading('Guardando...');
     try {
       await api.put(`/sucursales/${suc.id}`, {
         usaStock: flags.usaStock,
         usaFacturacion: flags.usaFacturacion,
-        usaEnvioCorreos: !!flags.usaEnvioCorreos,
+        usaEnvioCorreos,
         usaLotes: flags.usaStock ? lotesCheck.checked : false,
         usaConsultaPrecio,
       });
       // Refleja el cambio localmente para no perderlo si se vuelve a guardar.
-      Object.assign(suc, flags, { usaLotes: flags.usaStock ? lotesCheck.checked : false, usaConsultaPrecio });
+      Object.assign(suc, flags, { usaLotes: flags.usaStock ? lotesCheck.checked : false, usaConsultaPrecio, usaEnvioCorreos });
       ui.close();
       ui.success('Configuración guardada.');
     } catch (err) { ui.close(); ui.error(err.message); }
@@ -164,6 +172,10 @@ function formularioSucursal(suc) {
     h('h6', { class: 'mb-2' }, 'Facturación'),
     consultaWrap,
     urlBox,
+    h('hr'),
+    h('h6', { class: 'mb-2' }, 'Envío de correos'),
+    h('p', { class: 'text-muted small mb-2' }, 'Automatiza el envío de la quincena por email desde Excel. Se puede activar con cualquier paquete (o sola, con "Sin stock ni facturación").'),
+    correosWrap,
     h('div', { class: 'mt-4' }, [guardar]),
   ]);
 }
