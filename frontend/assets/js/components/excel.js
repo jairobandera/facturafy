@@ -145,25 +145,49 @@ export function findHeaderRow(matrix, aliasMap, requiredFields, maxScan = 20) {
 }
 
 /**
- * Parsea un entero tolerando separadores de miles (punto/coma) y simbolos.
- * Devuelve null si el valor tiene decimales reales (p.ej. combustibles en litros)
- * o si no es un numero valido.
+ * Parsea un entero tolerando separadores de miles/decimales en formato uruguayo
+ * ("1.234,00" = 1234), es-US ("1,234.00") y simples. Devuelve null si el valor tiene
+ * decimales REALES (p.ej. combustibles en litros "49.921,83") o si no es valido.
+ *
+ * Reglas (aditivas, no rompen lo anterior):
+ *  - punto Y coma: el decimal es el ULTIMO separador que aparece; el otro es de miles.
+ *  - solo coma: coma = decimal.
+ *  - solo punto (o sin separador): se mantiene el criterio anterior (punto = miles).
  */
 export function parseNumeroEntero(value) {
   if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'number') {
-    return Number.isInteger(value) ? value : null;
+  if (typeof value === 'number') return Number.isInteger(value) ? value : null;
+  let raw = String(value).trim().replace(/[^\d.,-]/g, '');
+  if (!raw || !/\d/.test(raw)) return null;
+  const tienePunto = raw.includes('.');
+  const tieneComa = raw.includes(',');
+  if (tienePunto && tieneComa) {
+    const sepDec = raw.lastIndexOf('.') > raw.lastIndexOf(',') ? '.' : ',';
+    const sepMil = sepDec === '.' ? ',' : '.';
+    raw = raw.split(sepMil).join('');
+    const [ent, dec] = raw.split(sepDec);
+    if (dec && /[1-9]/.test(dec)) return null; // decimal real -> se saltea
+    const n = Number.parseInt(ent, 10);
+    return Number.isNaN(n) ? null : n;
   }
-  const raw = String(value).trim();
-  // Deja solo digitos y separadores; los separadores se tratan como de miles.
-  const soloNum = raw.replace(/[^\d.,-]/g, '');
-  if (!soloNum || !/\d/.test(soloNum)) return null;
-  const entero = soloNum.replace(/[.,]/g, '');
-  const n = Number.parseInt(entero, 10);
+  if (tieneComa) {
+    const [ent, dec] = raw.split(',');
+    if (dec && /[1-9]/.test(dec)) return null;
+    const n = Number.parseInt(ent, 10);
+    return Number.isNaN(n) ? null : n;
+  }
+  // Solo punto o sin separador: punto como separador de miles (criterio histórico).
+  const n = Number.parseInt(raw.replace(/\./g, ''), 10);
   return Number.isNaN(n) ? null : n;
 }
 
-/** Parsea un precio tolerando "$u", espacios y separadores decimales. */
+/**
+ * Parsea un precio tolerando "$u", espacios y separadores decimales en formato
+ * uruguayo ("1.234,56" = 1234.56), es-US ("1,234.56") y simples.
+ *  - punto Y coma: el decimal es el ULTIMO separador; el otro es de miles.
+ *  - solo coma: coma = decimal.
+ *  - solo punto: punto = decimal (como hasta ahora, ej. "29.16610").
+ */
 export function parsePrecio(value) {
   if (value === null || value === undefined || value === '') return 0;
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -172,10 +196,11 @@ export function parsePrecio(value) {
   const tienePunto = raw.includes('.');
   const tieneComa = raw.includes(',');
   if (tienePunto && tieneComa) {
-    // Ambos presentes: la coma es separador de miles.
-    raw = raw.replace(/,/g, '');
+    const sepDec = raw.lastIndexOf('.') > raw.lastIndexOf(',') ? '.' : ',';
+    const sepMil = sepDec === '.' ? ',' : '.';
+    raw = raw.split(sepMil).join('');
+    if (sepDec === ',') raw = raw.replace(',', '.');
   } else if (tieneComa) {
-    // Solo coma: separador decimal -> punto.
     raw = raw.replace(/,/g, '.');
   }
   const n = Number.parseFloat(raw);
