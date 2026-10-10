@@ -204,9 +204,12 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `010-monedas-comentario-vuelto.sql` — cotizaciones de moneda, comentario y vuelto en la venta.
 > - `011-consulta-precio.sql` — flag de consulta de precios (kiosko) por sucursal.
 > - `012-envio-correos.sql` — paquete "Solo envío de correos" (contactos + historial).
+> - `013-stock-decimal.sql` — stock con decimales (`DECIMAL(14,3)`, ej. litros).
+> - `014-import-perfiles.sql` — perfiles de mapeo de columnas para importar Excels.
 >
 > ```bash
-> mysql -u <usuario> -p facturafy < backend/sql/migrations/012-envio-correos.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/013-stock-decimal.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/014-import-perfiles.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente
