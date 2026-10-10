@@ -121,6 +121,13 @@ A barcode is **not required** to create a product (bulk goods and services have 
 `POST /productos/:id/codigos-barra` accepts either `codigo` or `codigos` and splits on comma,
 semicolon, pipe or whitespace — pasting "123, 456" must store two codes, not one.
 
+**Importar Excels sin encabezado.** Los importadores (categorías, productos, "cargar stock") primero
+prueban `findHeaderRow` (camino de siempre); si no hay encabezado reconocible, abren el **asistente de
+mapeo** `components/mapeoColumnas.js` (elegir qué columna es cada campo, fila de inicio, filtro de
+filas y campos compuestos), que puede **guardar/reusar perfiles** por empresa+tipo (tabla
+`import_perfil`, módulo `importPerfil`). `aplicarMapeo()` convierte la matriz cruda en filas de
+objetos. Esto es aditivo: los Excels con encabezado y las plantillas siguen igual.
+
 `crearSimples` merges barcodes into a product that already exists instead of rejecting the row, and
 touches nothing else (price and stock belong to the stock Excel). It also **creates the categories**
 the file references: `resolverCategoriaDeImport()` looks the category up by id, then by
@@ -268,7 +275,9 @@ cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /
 `/estadisticas-venta` (`/resumen`, `/facturado-mes`, `/top-productos`), `/cotizaciones`
 (`GET /vivas?empresaId=`, `GET /venta?empresaId=&moneda=`, `GET|PUT /empresa/:empresaId`) y
 `/envio-correos` (paquete solo-correos: `GET|POST /contactos/sucursal/:id`, `DELETE /contactos/:id`,
-`POST /enviar/sucursal/:id`, `GET /sucursal/:id` historial, `GET /:id` detalle del lote).
+`POST /enviar/sucursal/:id`, `GET /sucursal/:id` historial, `GET /:id` detalle del lote) y
+`/import-perfiles` (perfiles de mapeo de columnas por empresa+tipo: `GET /empresa/:id?tipo=`, `POST /`,
+`DELETE /:id`).
 `/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
 active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
 devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).

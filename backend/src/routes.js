@@ -20,6 +20,7 @@ import { ventaRoutes } from './modules/venta/venta.routes.js';
 import { turnoRoutes } from './modules/turno/turno.routes.js';
 import { cotizacionRoutes } from './modules/cotizacion/cotizacion.module.js';
 import { envioCorreoRoutes } from './modules/envioCorreo/envioCorreo.module.js';
+import { importPerfilRoutes } from './modules/importPerfil/importPerfil.module.js';
 import { estadisticaVentaRoutes } from './modules/estadisticaVenta/estadisticaVenta.module.js';
 
 export function buildApiRouter() {
@@ -44,6 +45,7 @@ export function buildApiRouter() {
   api.use('/turnos', turnoRoutes);
   api.use('/cotizaciones', cotizacionRoutes);
   api.use('/envio-correos', envioCorreoRoutes);
+  api.use('/import-perfiles', importPerfilRoutes);
   api.use('/estadisticas-venta', estadisticaVentaRoutes);
   return api;
 }

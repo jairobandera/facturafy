@@ -4,6 +4,7 @@
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS import_perfil;
 DROP TABLE IF EXISTS envio_correo_detalle;
 DROP TABLE IF EXISTS envio_correo;
 DROP TABLE IF EXISTS contacto_correo;
@@ -58,6 +59,20 @@ CREATE TABLE cotizacion (
   actualizado DATETIME,
   CONSTRAINT uk_cotizacion_empresa_moneda UNIQUE (empresa_id, moneda),
   CONSTRAINT fk_cotizacion_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- IMPORT_PERFIL (perfiles de mapeo de columnas de Excel) ----------------
+-- Guarda, por empresa y tipo de import (categorias/productos/stock/contactos/...), un
+-- mapeo nombrado {columna -> campo} para no re-mapear cada vez un export sin encabezado.
+CREATE TABLE import_perfil (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  tipo       VARCHAR(30) NOT NULL,
+  nombre     VARCHAR(100) NOT NULL,
+  mapeo      TEXT,                 -- JSON: { mapeo, filaInicio, filtro }
+  activo     BOOLEAN NOT NULL DEFAULT TRUE,
+  INDEX idx_importperfil (empresa_id, tipo, activo),
+  CONSTRAINT fk_importperfil_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- SUCURSAL ----------------

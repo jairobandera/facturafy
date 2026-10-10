@@ -1,6 +1,6 @@
 import { h } from '../../core/dom.js';
 import { api } from '../../core/api.js';
-import { sucursalActiva, sucursalesDeMiEmpresa } from '../../core/sucursal.js';
+import { sucursalActiva, sucursalActual, sucursalesDeMiEmpresa } from '../../core/sucursal.js';
 import { sucursalSelect, campoSucursal } from '../../components/sucursalSelect.js';
 import { ui } from '../../core/ui.js';
 import { crudPage } from '../../components/crudPage.js';
@@ -8,7 +8,14 @@ import { activoBadge } from '../../components/badges.js';
 import {
   exportToExcel, excelButton, importFromExcelRaw, findHeaderRow,
 } from '../../components/excel.js';
+import { mapeoColumnas, aplicarMapeo } from '../../components/mapeoColumnas.js';
 import { descargarPlantilla } from '../../components/plantillas.js';
+
+const CAMPOS_CATEGORIA = [
+  { campo: 'nombre', label: 'Nombre', requerido: true },
+  { campo: 'codigo', label: 'Código', requerido: false },
+  { campo: 'descripcion', label: 'Descripción', requerido: false },
+];
 
 const ALIAS_CATEGORIA = {
   codigo: ['codigo', 'codigo_categoria', 'id', 'id_cat', 'id_categoria'],
@@ -28,22 +35,33 @@ export function gestionarCategorias() {
   async function onImport() {
     const matriz = await importFromExcelRaw();
     if (!matriz || matriz.length === 0) return;
+
+    // 1) Con encabezado reconocible: como siempre.
+    let filas = null;
     const header = findHeaderRow(matriz, ALIAS_CATEGORIA, ['nombre']);
-    if (!header) {
-      ui.error('No se encontró una columna de nombre de categoría en el archivo.');
-      return;
+    if (header) {
+      const { index, cols } = header;
+      const cell = (row, field) => (cols[field] !== undefined ? row[cols[field]] : null);
+      filas = [];
+      for (let i = index + 1; i < matriz.length; i++) {
+        const row = matriz[i] || [];
+        filas.push({ nombre: cell(row, 'nombre'), codigo: cell(row, 'codigo'), descripcion: cell(row, 'descripcion') });
+      }
+    } else {
+      // 2) Sin encabezado: asistente de mapeo (con perfiles).
+      const map = await mapeoColumnas({ matriz, campos: CAMPOS_CATEGORIA, empresaId: sucursalActual()?.empresaId, tipo: 'categorias' });
+      if (!map) return;
+      filas = aplicarMapeo(matriz, map);
     }
-    const { index, cols } = header;
-    const cell = (row, field) => (cols[field] !== undefined ? row[cols[field]] : null);
+
     const categorias = [];
-    for (let i = index + 1; i < matriz.length; i++) {
-      const row = matriz[i] || [];
-      const nombre = String(cell(row, 'nombre') ?? '').trim();
+    for (const f of filas) {
+      const nombre = String(f.nombre ?? '').trim();
       if (!nombre) continue;
       categorias.push({
         nombre,
-        codigoCategoria: String(cell(row, 'codigo') ?? '').trim() || null,
-        descripcion: cell(row, 'descripcion') != null ? String(cell(row, 'descripcion')).trim() : null,
+        codigoCategoria: String(f.codigo ?? '').trim() || null,
+        descripcion: f.descripcion != null ? String(f.descripcion).trim() : null,
       });
     }
     if (categorias.length === 0) { ui.error('No se encontraron categorías para importar.'); return; }

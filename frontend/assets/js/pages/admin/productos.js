@@ -1,6 +1,6 @@
 import { h } from '../../core/dom.js';
 import { api } from '../../core/api.js';
-import { sucursalActiva, sucursalesDeMiEmpresa } from '../../core/sucursal.js';
+import { sucursalActiva, sucursalActual, sucursalesDeMiEmpresa } from '../../core/sucursal.js';
 import { sucursalSelect, campoSucursal } from '../../components/sucursalSelect.js';
 import { ui, fmt } from '../../core/ui.js';
 import { crudPage } from '../../components/crudPage.js';
@@ -9,8 +9,24 @@ import {
   exportToExcel, excelButton, importFromExcelRaw, findHeaderRow, matchColumnsMulti,
   claveCodigo, parsePrecio, parseNumeroEntero,
 } from '../../components/excel.js';
+import { mapeoColumnas } from '../../components/mapeoColumnas.js';
 import { formModal } from '../../components/formModal.js';
 import { descargarPlantilla } from '../../components/plantillas.js';
+
+const CAMPOS_PRODUCTO = [
+  { campo: 'codigo', label: 'Código', requerido: true },
+  { campo: 'nombre', label: 'Nombre', requerido: true },
+  { campo: 'precio', label: 'Precio (venta)', requerido: false },
+  { campo: 'categoriaCodigo', label: 'Código categoría', requerido: false },
+  { campo: 'categoriaNombre', label: 'Nombre categoría', requerido: false },
+  { campo: 'stock', label: 'Stock', requerido: false },
+  { campo: 'barras', label: 'Código de barras', requerido: false },
+  { campo: 'detalle', label: 'Detalle', requerido: false },
+];
+const CAMPOS_STOCK = [
+  { campo: 'codigo', label: 'Código', requerido: true },
+  { campo: 'stock', label: 'Stock', requerido: true },
+];
 
 const ALIAS_PRODUCTO = {
   codigo: ['codigo_producto', 'codigoproducto', 'id_prod', 'id_producto', 'codigo'],
@@ -239,20 +255,25 @@ export function gestionarProductos() {
   async function onImport() {
     const matriz = await importFromExcelRaw();
     if (!matriz || matriz.length === 0) return;
+    // Con encabezado reconocible, como siempre; si no, asistente de mapeo (con perfiles).
     const header = findHeaderRow(matriz, ALIAS_PRODUCTO, ['codigo', 'nombre']);
-    if (!header) {
-      ui.error('No se reconocieron las columnas de código y nombre en el archivo de productos.');
-      return;
+    let cols, filaInicio, filtro = null, headerMode;
+    if (header) {
+      cols = header.cols; filaInicio = header.index + 1; headerMode = true;
+    } else {
+      const map = await mapeoColumnas({ matriz, campos: CAMPOS_PRODUCTO, empresaId: sucursalActual()?.empresaId, tipo: 'productos', conFiltro: true });
+      if (!map) return;
+      cols = map.mapeo; filaInicio = map.filaInicio; filtro = map.filtro; headerMode = false;
     }
+    const cell = (row, field) => (cols[field] !== undefined ? row[cols[field]] : null);
     const barrasPorCodigo = await pedirBarras();
     ui.loading('Importando productos...');
     await loadRefs(); // refresca categorias por si se importaron recien
-    const { index, cols } = header;
-    const cell = (row, field) => (cols[field] !== undefined ? row[cols[field]] : null);
     const productos = [];
     let ignoradasSinNombre = 0;
-    for (let i = index + 1; i < matriz.length; i++) {
+    for (let i = filaInicio; i < matriz.length; i++) {
       const row = matriz[i] || [];
+      if (filtro && String(row[filtro.col] ?? '').trim().toLowerCase() !== filtro.valor.toLowerCase()) continue;
       const codigoProducto = String(cell(row, 'codigo') ?? '').trim();
       const nombre = String(cell(row, 'nombre') ?? '').trim();
       if (!codigoProducto && !nombre) continue;
@@ -260,7 +281,9 @@ export function gestionarProductos() {
       // pero no es un producto. Se ignora en vez de mandarlo y que falle.
       if (!nombre) { ignoradasSinNombre++; continue; }
       let stock = parseCantidad(cell(row, 'stock'));
-      if (stock === null && cols.stock !== undefined) stock = parseCantidad(row[cols.stock + 1]);
+      // En el reporte (modo encabezado), la columna "Stock Final" trae la unidad y el
+      // numero queda en la siguiente. En el asistente se mapea la columna exacta.
+      if (stock === null && headerMode && cols.stock !== undefined) stock = parseCantidad(row[cols.stock + 1]);
       // Codigos de barra: los de la misma planilla (columna inline) + los del archivo aparte.
       const barrasInline = String(cell(row, 'barras') ?? '')
         .split(/[|,;]/).map((s) => s.trim()).filter(Boolean);
@@ -319,21 +342,25 @@ export function gestionarProductos() {
     const matriz = await importFromExcelRaw();
     if (!matriz || matriz.length === 0) return;
     const header = findHeaderRow(matriz, ALIAS_STOCK_CONTEO, ['codigo', 'stock']);
-    if (!header) {
-      ui.error('No se reconocieron las columnas de código y stock final en el archivo.');
-      return;
+    let cols, filaInicio, filtro = null, headerMode;
+    if (header) {
+      cols = header.cols; filaInicio = header.index + 1; headerMode = true;
+    } else {
+      const map = await mapeoColumnas({ matriz, campos: CAMPOS_STOCK, empresaId: sucursalActual()?.empresaId, tipo: 'stock', conFiltro: true });
+      if (!map) return;
+      cols = map.mapeo; filaInicio = map.filaInicio; filtro = map.filtro; headerMode = false;
     }
-    const { index, cols } = header;
     const productos = [];
     let ignorados = 0;
-    for (let i = index + 1; i < matriz.length; i++) {
+    for (let i = filaInicio; i < matriz.length; i++) {
       const row = matriz[i] || [];
+      if (filtro && String(row[filtro.col] ?? '').trim().toLowerCase() !== filtro.valor.toLowerCase()) continue;
       const codigoProducto = String(row[cols.codigo] ?? '').trim();
       if (!codigoProducto) continue;
       // El valor numerico puede estar en la columna del encabezado o en la siguiente
       // (en el reporte, la columna del encabezado "Stock Final" contiene la unidad).
       let stock = parseCantidad(row[cols.stock]);
-      if (stock === null) stock = parseCantidad(row[cols.stock + 1]);
+      if (stock === null && headerMode) stock = parseCantidad(row[cols.stock + 1]);
       if (stock === null) { ignorados++; continue; }
       productos.push({ codigoProducto, cantidadStock: stock });
     }

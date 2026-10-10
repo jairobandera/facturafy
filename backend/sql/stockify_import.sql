@@ -20,6 +20,7 @@ USE `facturafy`;
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS import_perfil;
 DROP TABLE IF EXISTS envio_correo_detalle;
 DROP TABLE IF EXISTS envio_correo;
 DROP TABLE IF EXISTS contacto_correo;
@@ -74,6 +75,20 @@ CREATE TABLE cotizacion (
   actualizado DATETIME,
   CONSTRAINT uk_cotizacion_empresa_moneda UNIQUE (empresa_id, moneda),
   CONSTRAINT fk_cotizacion_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- IMPORT_PERFIL (perfiles de mapeo de columnas de Excel) ----------------
+-- Guarda, por empresa y tipo de import (categorias/productos/stock/contactos/...), un
+-- mapeo nombrado {columna -> campo} para no re-mapear cada vez un export sin encabezado.
+CREATE TABLE import_perfil (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  empresa_id BIGINT NOT NULL,
+  tipo       VARCHAR(30) NOT NULL,
+  nombre     VARCHAR(100) NOT NULL,
+  mapeo      TEXT,                 -- JSON: { mapeo, filaInicio, filtro }
+  activo     BOOLEAN NOT NULL DEFAULT TRUE,
+  INDEX idx_importperfil (empresa_id, tipo, activo),
+  CONSTRAINT fk_importperfil_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- SUCURSAL ----------------
@@ -529,11 +544,11 @@ INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'SUPERADMINISTRADOR', 1, 0),
-  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'ADMINISTRADOR',      1, 0),
-  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'EMPLEADO',           1, 0),
-  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'EMPLEADO',           1, 1),
-  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'CAJERO',             1, 0);
+  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'SUPERADMINISTRADOR', 1, 0),
+  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'ADMINISTRADOR',      1, 0),
+  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'EMPLEADO',           1, 0),
+  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'EMPLEADO',           1, 1),
+  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'CAJERO',             1, 0);
 
 -- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
 INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES
