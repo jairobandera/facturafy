@@ -380,6 +380,11 @@ quincena de facturación). Guarda historial en `envio_correo` + `envio_correo_de
 `pages/admin/correos{Contactos,Enviar,Historial}.js`, reusando `components/excel.js`
 (`importFromExcelRaw`, `findHeaderRow`, `claveCodigo`, `parsePrecio`) y `components/plantillas.js`
 (plantillas `correosContactos` / `correosEstadoCuenta`). La clave se normaliza con `claveCodigo`.
+`correosEnviar.js` tiene un **2º modo "estado de cuenta de un cliente"** que parsea un informe
+por-cliente (titular + cuenta en el preámbulo, conceptos y Total) y lo manda a ese cliente; si la
+cuenta no está en contactos, se pide el email a mano (`enviar` acepta `email`/`nombre` en el `estado`
+como fallback cuando no hay contacto). Los contactos se pueden cargar desde `clientes.xlsx` con el
+asistente (filtro Tipo=Cliente, clave compuesta RUT/CI o la cuenta, nombre = razón social o nom+ape).
 
 **Correo SMTP por sucursal con respaldo.** Las credenciales viven en `sucursal.smtp_*` (las carga el
 superadmin en el form de sucursal; `smtp_pass` solo se devuelve al editar). `mailer.js#resolverSmtp`

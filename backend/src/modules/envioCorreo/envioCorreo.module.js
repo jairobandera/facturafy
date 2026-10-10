@@ -137,21 +137,25 @@ export const envioCorreoService = {
       const lineas = Array.isArray(e.lineas) ? e.lineas.map((l) => ({ ...l, monto: Number(l.monto) || 0 })) : [];
       const total = e.total != null ? Number(e.total) : lineas.reduce((a, l) => a + l.monto, 0);
       const c = contactos.get(clave);
-      if (!c || !c.email) {
+      // Email/nombre: del contacto por clave; si no hay, los que traiga el propio estado
+      // (caso "estado de cuenta de un cliente", donde el email se ingresa a mano).
+      const email = (c && c.email) ? c.email : (e.email ? String(e.email).trim() : null);
+      const nombre = (c && c.nombre) ? c.nombre : (e.nombre || null);
+      if (!email) {
         sinContacto++;
-        detalle.push({ clave, nombre: c?.nombre || null, email: c?.email || null, monto: total, estado: 'SIN_CONTACTO', error: 'Sin contacto/email para esa clave' });
+        detalle.push({ clave, nombre, email: null, monto: total, estado: 'SIN_CONTACTO', error: 'Sin contacto/email para esa clave' });
         continue;
       }
       try {
         const r = await enviarConFallback(
           { transporter, from: smtp.from, transporterRespaldo, fromRespaldo: respaldo?.from },
-          { to: c.email, subject: asunto || `Estado de cuenta - ${sucursalNombre}`, html: htmlEstado({ nombre: c.nombre, lineas, total, asunto, mensaje, sucursalNombre }) }
+          { to: email, subject: asunto || `Estado de cuenta - ${sucursalNombre}`, html: htmlEstado({ nombre, lineas, total, asunto, mensaje, sucursalNombre }) }
         );
         enviados++;
-        detalle.push({ clave, nombre: c.nombre, email: c.email, monto: total, estado: 'ENVIADO', error: r.via === 'respaldo' ? 'enviado por respaldo (.env)' : null });
+        detalle.push({ clave, nombre, email, monto: total, estado: 'ENVIADO', error: r.via === 'respaldo' ? 'enviado por respaldo (.env)' : null });
       } catch (err) {
         fallidos++;
-        detalle.push({ clave, nombre: c.nombre, email: c.email, monto: total, estado: 'FALLIDO', error: err.message });
+        detalle.push({ clave, nombre, email, monto: total, estado: 'FALLIDO', error: err.message });
       }
     }
 
