@@ -12,8 +12,6 @@ import { h, clear } from '../core/dom.js';
 import { api } from '../core/api.js';
 import { ui } from '../core/ui.js';
 
-const Swal = window.Swal;
-
 export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = false }) {
   return new Promise((resolve) => {
     const preview = (matriz || []).slice(0, 12);
@@ -108,18 +106,23 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
       return { mapeo, filaInicio, filtro };
     }
 
+    // Input inline (NO un Swal anidado: el focus-trap del modal de Bootstrap no deja
+    // tipear en un overlay por encima).
+    const nombrePerfilInput = h('input', { class: 'form-control form-control-sm w-auto', type: 'text', placeholder: 'Nombre del perfil', style: { maxWidth: '200px' } });
     const guardarPerfilBtn = h('button', { class: 'btn btn-outline-secondary btn-sm', type: 'button' }, [h('i', { class: 'bi bi-save me-1' }), 'Guardar perfil']);
     guardarPerfilBtn.addEventListener('click', async () => {
-      if (!empresaId) { ui.error('No se pudo determinar la empresa.'); return; }
-      const { value: nombre } = await Swal.fire({ title: 'Nombre del perfil', input: 'text', inputPlaceholder: 'Ej: Export sistema viejo', showCancelButton: true, confirmButtonColor: '#2563eb' });
-      if (!nombre) return;
+      if (!empresaId) { errorBox.textContent = 'No se pudo determinar la empresa para guardar el perfil.'; errorBox.classList.remove('d-none'); return; }
+      const nombre = nombrePerfilInput.value.trim();
+      if (!nombre) { errorBox.textContent = 'Escribí un nombre para el perfil.'; errorBox.classList.remove('d-none'); nombrePerfilInput.focus(); return; }
+      errorBox.classList.add('d-none');
       try {
-        await api.post('/import-perfiles', { empresaId, tipo, nombre: nombre.trim(), mapeo: leerMapeo() });
+        await api.post('/import-perfiles', { empresaId, tipo, nombre, mapeo: leerMapeo() });
         ui.toast('Perfil guardado.');
+        nombrePerfilInput.value = '';
         perfiles = await api.get(`/import-perfiles/empresa/${empresaId}?tipo=${encodeURIComponent(tipo || '')}`);
         clear(perfilSel); perfilSel.append(h('option', { value: '' }, '— elegir perfil guardado —'));
         for (const p of perfiles) perfilSel.append(h('option', { value: String(p.id) }, p.nombre));
-      } catch (err) { ui.error(err.message); }
+      } catch (err) { errorBox.textContent = err.message; errorBox.classList.remove('d-none'); }
     });
 
     // --- tabla de vista previa ---
@@ -145,7 +148,8 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
           h('div', { class: 'modal-body' }, [
             h('p', { class: 'text-muted small' }, 'Tu archivo no tiene encabezado reconocible. Indicá qué columna es cada campo y desde qué fila empiezan los datos. Podés guardar un perfil para reusarlo.'),
             h('div', { class: 'd-flex flex-wrap gap-2 align-items-center mb-3' }, [
-              h('span', { class: 'small text-muted' }, 'Perfil:'), perfilSel, guardarPerfilBtn,
+              h('span', { class: 'small text-muted' }, 'Perfil:'), perfilSel,
+              h('span', { class: 'text-muted' }, '·'), nombrePerfilInput, guardarPerfilBtn,
             ]),
             previewTable,
             h('div', { class: 'row g-2 align-items-center mb-3' }, [
@@ -165,7 +169,8 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
     ]);
 
     document.body.append(modalEl);
-    const modal = new bootstrap.Modal(modalEl);
+    // focus:false para no atrapar el foco (que además molestaba a inputs/overlays).
+    const modal = new bootstrap.Modal(modalEl, { focus: false });
     let aceptado = false;
 
     modalEl.querySelector('#mc-aceptar').addEventListener('click', () => {
