@@ -78,11 +78,14 @@ export function matchColumns(headerRow, aliasMap) {
     if (idx !== -1) { result[field] = idx; tomadas.add(idx); }
   }
   // Segunda pasada: coincidencia por "contiene", sin reusar columnas ya asignadas.
+  // El encabezado debe CONTENER un alias, o ser una abreviatura de >=3 letras del alias
+  // (ej. "cod" -> "codigo"). El minimo evita falsos positivos: un valor cortisimo como
+  // "$u" -> "u" no debe matchear "codigoprodUcto" solo por contener la letra "u".
   for (const [field, aliases] of Object.entries(aliasMap)) {
     if (result[field] !== undefined) continue;
     const wanted = aliases.map(normalizeHeader);
     const idx = normalized.findIndex((hdr, i) =>
-      hdr && !tomadas.has(i) && wanted.some((w) => hdr.includes(w) || w.includes(hdr)));
+      hdr && !tomadas.has(i) && wanted.some((w) => hdr.includes(w) || (hdr.length >= 3 && w.includes(hdr))));
     if (idx !== -1) { result[field] = idx; tomadas.add(idx); }
   }
   return result;
