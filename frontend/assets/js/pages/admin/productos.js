@@ -35,6 +35,12 @@ const ALIAS_STOCK_CONTEO = {
   stock: ['stock_final', 'stockfinal', 'stock', 'existencia', 'cantidad_final'],
 };
 
+// Cantidad de stock tolerante a decimales (ej. combustible en litros "49.921,83").
+// Devuelve null cuando la celda no tiene ningun numero (p.ej. "item"/"ltr"), para que
+// el importador pueda probar la columna siguiente (en los reportes la columna del
+// encabezado "Stock Final" trae la unidad y el numero queda corrido).
+const parseCantidad = (v) => (/\d/.test(String(v ?? '')) ? parsePrecio(v) : null);
+
 export function gestionarProductos() {
   // Sucursal que se esta viendo: la propia por defecto, cambiable desde la barra.
   // Todo (catalogo, importaciones y altas) trabaja sobre ella.
@@ -253,8 +259,8 @@ export function gestionarProductos() {
       // Pie del informe (fecha, razon social): tiene algo en la columna del codigo
       // pero no es un producto. Se ignora en vez de mandarlo y que falle.
       if (!nombre) { ignoradasSinNombre++; continue; }
-      let stock = parseNumeroEntero(cell(row, 'stock'));
-      if (stock === null && cols.stock !== undefined) stock = parseNumeroEntero(row[cols.stock + 1]);
+      let stock = parseCantidad(cell(row, 'stock'));
+      if (stock === null && cols.stock !== undefined) stock = parseCantidad(row[cols.stock + 1]);
       // Codigos de barra: los de la misma planilla (columna inline) + los del archivo aparte.
       const barrasInline = String(cell(row, 'barras') ?? '')
         .split(/[|,;]/).map((s) => s.trim()).filter(Boolean);
@@ -326,13 +332,13 @@ export function gestionarProductos() {
       if (!codigoProducto) continue;
       // El valor numerico puede estar en la columna del encabezado o en la siguiente
       // (en el reporte, la columna del encabezado "Stock Final" contiene la unidad).
-      let stock = parseNumeroEntero(row[cols.stock]);
-      if (stock === null) stock = parseNumeroEntero(row[cols.stock + 1]);
+      let stock = parseCantidad(row[cols.stock]);
+      if (stock === null) stock = parseCantidad(row[cols.stock + 1]);
       if (stock === null) { ignorados++; continue; }
       productos.push({ codigoProducto, cantidadStock: stock });
     }
     if (productos.length === 0) {
-      ui.error(`No se encontró stock válido para cargar. Filas ignoradas (vacías o con decimales): ${ignorados}.`);
+      ui.error(`No se encontró stock válido para cargar. Filas ignoradas (vacías): ${ignorados}.`);
       return;
     }
     ui.loading('Cargando stock esperado...');
@@ -384,7 +390,7 @@ export function gestionarProductos() {
       { name: 'codigoProducto', label: 'Código de producto', required: true, value: row?.codigoProducto, colClass: 'col-md-4' },
       { name: 'nombre', label: 'Nombre', required: true, value: row?.nombre, colClass: 'col-md-8' },
       { name: 'precio', label: 'Precio', type: 'number', min: 0, step: '0.01', required: true, value: row?.precio, colClass: 'col-md-4' },
-      { name: 'cantidadStock', label: 'Stock', type: 'number', required: true, value: row?.cantidadStock, colClass: 'col-md-4', help: 'Puede ser negativo si se vendió más de lo cargado.' },
+      { name: 'cantidadStock', label: 'Stock', type: 'number', step: '0.001', required: true, value: row?.cantidadStock, colClass: 'col-md-4', help: 'Admite decimales (ej. litros). Puede ser negativo si se vendió más de lo cargado.' },
       { name: 'categoriaId', label: 'Categoría', type: 'select', value: row?.categoriaId, options: categorias.map((c) => ({ value: c.id, label: c.nombre })), placeholder: 'Sin categoría', colClass: 'col-md-4' },
       { name: 'codigosBarra', label: 'Códigos de barra', type: 'tags', value: row?.codigosBarra, help: 'Separar múltiples códigos con comas. Sólo se agregan: para quitar uno, usá el botón de códigos de barra de la lista.', colClass: 'col-md-6' },
       { name: 'proveedorIds', label: 'Proveedores', type: 'multiselect', value: row?.proveedorIds, options: proveedores.map((p) => ({ value: p.id, label: p.nombre })), colClass: 'col-md-6' },

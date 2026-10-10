@@ -159,7 +159,8 @@ CREATE TABLE producto (
   nombre          VARCHAR(255) NOT NULL,
   detalle         VARCHAR(255),
   precio          FLOAT NOT NULL,
-  cantidad_stock  BIGINT NOT NULL,
+  -- DECIMAL para admitir stock con decimales (ej. combustible en litros).
+  cantidad_stock  DECIMAL(14,3) NOT NULL,
   activo          BOOLEAN NOT NULL DEFAULT TRUE,
   sucursal_id     BIGINT NOT NULL,
   categoria_id    BIGINT NOT NULL,
@@ -192,7 +193,7 @@ CREATE TABLE lote (
   numero_lote       VARCHAR(255) NOT NULL,
   fecha_ingreso     DATE NOT NULL,
   fecha_vencimiento DATE,
-  cantidad_stock    INT NOT NULL,
+  cantidad_stock    DECIMAL(14,3) NOT NULL,
   activo            BOOLEAN NOT NULL DEFAULT TRUE,
   -- Indica si este lote sumo su cantidad al stock del producto (mercaderia nueva).
   -- Si es 0 el lote solo etiqueta stock que ya estaba contado (por ejemplo el del Excel).
@@ -242,8 +243,8 @@ CREATE TABLE conteo (
 CREATE TABLE conteo_producto (
   id                INT AUTO_INCREMENT PRIMARY KEY,
   precio_actual     FLOAT NOT NULL DEFAULT 0,
-  cantidad_esperada INT,
-  cantidad_contada  INT,
+  cantidad_esperada DECIMAL(14,3),
+  cantidad_contada  DECIMAL(14,3),
   conteo_id         BIGINT,
   producto_id       BIGINT,
   usuario_id        BIGINT,

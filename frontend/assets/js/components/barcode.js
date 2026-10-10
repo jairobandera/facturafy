@@ -182,7 +182,7 @@ export async function askCantidad({ producto, esperada, nota }) {
         <div><b>Cantidad esperada:</b> ${escapeHtml(esperada)}</div>
         ${nota ? `<div class="text-warning-emphasis mt-1"><i class="bi bi-exclamation-triangle me-1"></i>${escapeHtml(nota)}</div>` : ''}
       </div>
-      <input id="sk-qty" type="number" min="0" class="form-control" placeholder="Cantidad contada" />
+      <input id="sk-qty" type="number" min="0" step="0.001" class="form-control" placeholder="Cantidad contada" />
     `,
     showCancelButton: true,
     confirmButtonText: 'Registrar',
@@ -284,7 +284,7 @@ export function iniciarConteoGuiado({ obtenerSiguiente, registrar, restante, onC
     clear(bodyWrap);
 
     const input = h('input', {
-      id: 'sk-guiado-qty', type: 'number', min: 0, class: 'form-control form-control-lg text-center',
+      id: 'sk-guiado-qty', type: 'number', min: 0, step: '0.001', class: 'form-control form-control-lg text-center',
       placeholder: 'Cantidad contada',
     });
     const regBtn = h('button', { class: 'btn btn-primary btn-lg w-100' },

@@ -203,7 +203,7 @@ export function gestionarLotes(ctx) {
     buildFields: (row) => [
       { name: 'numeroLote', label: 'Número de lote', required: true, value: row?.numeroLote, colClass: 'col-md-6', help: 'El número que trae el proveedor. Puede repetirse entre productos distintos.' },
       { name: 'productoId', label: 'Producto', type: 'searchselect', required: true, value: row?.productoId, options: productos.map((p) => ({ value: p.id, label: `${p.nombre} (${p.codigoProducto})` })), placeholder: 'Escribí el nombre o el código...', colClass: 'col-md-6', help: 'Buscá por nombre o código y elegilo de la lista.' },
-      { name: 'cantidadStock', label: 'Cantidad de stock', type: 'number', min: 0, required: true, value: row?.cantidadStock, colClass: 'col-md-4' },
+      { name: 'cantidadStock', label: 'Cantidad de stock', type: 'number', min: 0, step: '0.001', required: true, value: row?.cantidadStock, colClass: 'col-md-4' },
       { name: 'fechaIngreso', label: 'Fecha de ingreso', type: 'date', required: true, value: row?.fechaIngreso || hoy(), colClass: 'col-md-4' },
       { name: 'fechaVencimiento', label: 'Fecha de vencimiento', type: 'date', value: row?.fechaVencimiento, colClass: 'col-md-4' },
       {

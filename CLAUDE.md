@@ -186,6 +186,13 @@ form, by the catalog import (`crear-simples`) and by the stock Excel (`actualiza
 replaces the value — that is the "stock final" flow used before a conteo). Finalizing a conteo does
 **not** write back to it.
 
+**El stock admite decimales** (`DECIMAL(14,3)` en `producto.cantidad_stock`, `lote.cantidad_stock` y
+`conteo_producto.cantidad_esperada/contada`; migración 013), por ej. combustible en litros. El pool
+(`config/db.js`) usa `decimalNumbers: true` para devolverlos como número. `venta_detalle.cantidad`
+sigue **entera** (las ventas no cambiaron). La importación de stock parsea decimales con
+`parseCantidad` (basado en `parsePrecio`), que devuelve `null` cuando la celda no trae número para
+tolerar la columna de unidad de los reportes ("item"/"ltr") y usar la columna siguiente.
+
 A **lote** only labels part of that stock:
 
 ```

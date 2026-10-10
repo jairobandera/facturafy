@@ -13,6 +13,8 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   namedPlaceholders: true,
   dateStrings: true, // devuelve DATE/DATETIME como string, evita desfasajes de zona horaria
+  // Devuelve las columnas DECIMAL como numero JS (las cantidades de stock son DECIMAL).
+  decimalNumbers: true,
 });
 
 /**

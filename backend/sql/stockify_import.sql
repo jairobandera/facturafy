@@ -175,7 +175,8 @@ CREATE TABLE producto (
   nombre          VARCHAR(255) NOT NULL,
   detalle         VARCHAR(255),
   precio          FLOAT NOT NULL,
-  cantidad_stock  BIGINT NOT NULL,
+  -- DECIMAL para admitir stock con decimales (ej. combustible en litros).
+  cantidad_stock  DECIMAL(14,3) NOT NULL,
   activo          BOOLEAN NOT NULL DEFAULT TRUE,
   sucursal_id     BIGINT NOT NULL,
   categoria_id    BIGINT NOT NULL,
@@ -208,7 +209,7 @@ CREATE TABLE lote (
   numero_lote       VARCHAR(255) NOT NULL,
   fecha_ingreso     DATE NOT NULL,
   fecha_vencimiento DATE,
-  cantidad_stock    INT NOT NULL,
+  cantidad_stock    DECIMAL(14,3) NOT NULL,
   activo            BOOLEAN NOT NULL DEFAULT TRUE,
   -- Indica si este lote sumo su cantidad al stock del producto (mercaderia nueva).
   -- Si es 0 el lote solo etiqueta stock que ya estaba contado (por ejemplo el del Excel).
@@ -258,8 +259,8 @@ CREATE TABLE conteo (
 CREATE TABLE conteo_producto (
   id                INT AUTO_INCREMENT PRIMARY KEY,
   precio_actual     FLOAT NOT NULL DEFAULT 0,
-  cantidad_esperada INT,
-  cantidad_contada  INT,
+  cantidad_esperada DECIMAL(14,3),
+  cantidad_contada  DECIMAL(14,3),
   conteo_id         BIGINT,
   producto_id       BIGINT,
   usuario_id        BIGINT,
@@ -528,11 +529,11 @@ INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'SUPERADMINISTRADOR', 1, 0),
-  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'ADMINISTRADOR',      1, 0),
-  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'EMPLEADO',           1, 0),
-  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'EMPLEADO',           1, 1),
-  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$5cyyZrkXuNZGyltbt3toSuNFzdgsvMiWnAVzZ5aje9GldXLC0sVpu', 'CAJERO',             1, 0);
+  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'SUPERADMINISTRADOR', 1, 0),
+  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'ADMINISTRADOR',      1, 0),
+  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'EMPLEADO',           1, 0),
+  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'EMPLEADO',           1, 1),
+  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$HgEnFkMpOnguJYz3iFumdun5Uq6AJ/1umOBRA3ZbcSvIkRiasv4fe', 'CAJERO',             1, 0);
 
 -- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
 INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES
