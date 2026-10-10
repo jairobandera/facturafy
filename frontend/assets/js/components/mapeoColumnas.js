@@ -33,12 +33,16 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
     const camposRows = campos.map((f) => {
       const sel = h('select', { class: 'form-select' }, opcionesCol());
       selects[f.campo] = sel;
-      const cols = [h('div', { class: 'col-5 fw-semibold' }, [f.label, f.requerido ? h('span', { class: 'text-danger' }, ' *') : null]),
+      const cols = [h('div', { class: 'col-4 fw-semibold' }, [f.label, f.requerido ? h('span', { class: 'text-danger' }, ' *') : null]),
         h('div', { class: 'col' }, sel)];
       if (f.compuesto) {
+        // Hasta 2 columnas extra: para filas heterogeneas (ej. razon social O nombre+apellido),
+        // se toma la primera no vacia / se concatenan las presentes.
         const sel2 = h('select', { class: 'form-select' }, opcionesCol());
-        selectsExtra[f.campo] = sel2;
-        cols.push(h('div', { class: 'col' }, [h('div', { class: 'small text-muted' }, '+ 2ª columna (opcional)'), sel2]));
+        const sel3 = h('select', { class: 'form-select' }, opcionesCol());
+        selectsExtra[f.campo] = [sel2, sel3];
+        cols.push(h('div', { class: 'col' }, [h('div', { class: 'small text-muted' }, '+ otra col.'), sel2]));
+        cols.push(h('div', { class: 'col' }, [h('div', { class: 'small text-muted' }, '+ otra col.'), sel3]));
       }
       return h('div', { class: 'row g-2 align-items-center mb-2' }, cols);
     });
@@ -67,8 +71,13 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
       const m = p.mapeo || {};
       for (const f of campos) {
         const v = (m.mapeo || {})[f.campo];
-        if (Array.isArray(v)) { selects[f.campo].value = v[0] != null ? String(v[0]) : ''; if (selectsExtra[f.campo]) selectsExtra[f.campo].value = v[1] != null ? String(v[1]) : ''; }
-        else selects[f.campo].value = v != null ? String(v) : '';
+        if (Array.isArray(v)) {
+          selects[f.campo].value = v[0] != null ? String(v[0]) : '';
+          if (selectsExtra[f.campo]) {
+            selectsExtra[f.campo][0].value = v[1] != null ? String(v[1]) : '';
+            selectsExtra[f.campo][1].value = v[2] != null ? String(v[2]) : '';
+          }
+        } else selects[f.campo].value = v != null ? String(v) : '';
       }
       if (m.filaInicio != null) filaInicioInput.value = String(m.filaInicio);
       if (conFiltro && m.filtro) { filtroColSel.value = m.filtro.col != null ? String(m.filtro.col) : ''; filtroValInput.value = m.filtro.valor || ''; }
@@ -88,7 +97,8 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
       for (const f of campos) {
         const v = selects[f.campo].value;
         if (f.compuesto && selectsExtra[f.campo]) {
-          const arr = [v === '' ? null : Number(v), selectsExtra[f.campo].value === '' ? null : Number(selectsExtra[f.campo].value)].filter((x) => x != null);
+          const arr = [v, ...selectsExtra[f.campo].map((s) => s.value)]
+            .map((x) => (x === '' ? null : Number(x))).filter((x) => x != null);
           if (arr.length) mapeo[f.campo] = arr;
         } else if (v !== '') mapeo[f.campo] = Number(v);
       }

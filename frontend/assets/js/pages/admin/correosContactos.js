@@ -7,11 +7,12 @@ import { ui } from '../../core/ui.js';
 import { renderShell } from '../../core/layout.js';
 import { pageHeader, spinner, primaryButton } from '../../components/page.js';
 import { dataTable } from '../../components/dataTable.js';
-import { sucursalActiva } from '../../core/sucursal.js';
+import { sucursalActiva, sucursalActual } from '../../core/sucursal.js';
 import { sucursalSelect } from '../../components/sucursalSelect.js';
 import {
   importFromExcelRaw, findHeaderRow, claveCodigo, excelButton,
 } from '../../components/excel.js';
+import { mapeoColumnas, aplicarMapeo } from '../../components/mapeoColumnas.js';
 import { descargarPlantilla } from '../../components/plantillas.js';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -20,6 +21,13 @@ const ALIAS = {
   nombre: ['nombre', 'razonsocial', 'razon_social', 'cliente', 'nombre_cliente'],
   email: ['email', 'correo', 'mail', 'e-mail'],
 };
+// Para listados sin encabezado (ej. mezcla empresas/personas): los campos son compuestos
+// (ej. nombre = razón social O nombre+apellido) y se puede filtrar por una columna Tipo.
+const CAMPOS_CONTACTO = [
+  { campo: 'nombre', label: 'Nombre (razón social o nombre+apellido)', requerido: true, compuesto: true },
+  { campo: 'clave', label: 'Clave (RUT / CI / código)', requerido: true, compuesto: true },
+  { campo: 'email', label: 'Email', requerido: true, compuesto: true },
+];
 
 export function correosContactosPage() {
   const content = renderShell('Contactos');
@@ -42,18 +50,29 @@ export function correosContactosPage() {
     let matriz;
     try { matriz = await importFromExcelRaw(); } catch (err) { ui.error(`No se pudo leer el Excel: ${err.message}`); return; }
     if (!matriz || !matriz.length) return;
+    // Con encabezado reconocible, como siempre; si no, asistente de mapeo (con perfiles).
+    let filas = null;
     const header = findHeaderRow(matriz, ALIAS, ['clave', 'email']);
-    if (!header) { ui.error('No se reconocieron las columnas. Usá la plantilla (Clave, Nombre, Email).'); return; }
-    const { index, cols } = header;
-    const cell = (row, f) => (cols[f] !== undefined ? row[cols[f]] : null);
+    if (header) {
+      const { index, cols } = header;
+      const cell = (row, f) => (cols[f] !== undefined ? row[cols[f]] : null);
+      filas = [];
+      for (let i = index + 1; i < matriz.length; i++) {
+        const row = matriz[i] || [];
+        filas.push({ clave: cell(row, 'clave'), email: cell(row, 'email'), nombre: cell(row, 'nombre') });
+      }
+    } else {
+      const map = await mapeoColumnas({ matriz, campos: CAMPOS_CONTACTO, empresaId: sucursalActual()?.empresaId, tipo: 'contactos', conFiltro: true });
+      if (!map) return;
+      filas = aplicarMapeo(matriz, map);
+    }
 
     const items = [];
     let invalidos = 0;
-    for (let i = index + 1; i < matriz.length; i++) {
-      const row = matriz[i] || [];
-      const clave = claveCodigo(cell(row, 'clave'));
-      const email = String(cell(row, 'email') ?? '').trim();
-      const nombre = String(cell(row, 'nombre') ?? '').trim() || null;
+    for (const f of filas) {
+      const clave = claveCodigo(f.clave);
+      const email = String(f.email ?? '').trim();
+      const nombre = String(f.nombre ?? '').trim() || null;
       if (!clave && !email) continue;               // fila vacía
       if (!clave || !EMAIL_RE.test(email)) { invalidos++; continue; }
       items.push({ clave, nombre, email });
