@@ -65,7 +65,7 @@ export function normalizeHeader(value) {
  * @param {Object<string,string[]>} aliasMap  { campo: [alias aceptados...] }.
  * @returns {Object<string,number>} { campo: indiceColumna } (solo los encontrados).
  */
-export function matchColumns(headerRow, aliasMap) {
+export function matchColumns(headerRow, aliasMap, exact = false) {
   const normalized = (headerRow || []).map(normalizeHeader);
   const result = {};
   const tomadas = new Set();
@@ -77,6 +77,9 @@ export function matchColumns(headerRow, aliasMap) {
     const idx = normalized.findIndex((hdr, i) => hdr && !tomadas.has(i) && wanted.includes(hdr));
     if (idx !== -1) { result[field] = idx; tomadas.add(idx); }
   }
+  // En modo exacto solo vale la coincidencia EXACTA (para encabezados que, si no, un
+  // dato cualquiera dispara un falso positivo: ej. "RUTA 3 KM 371" contiene "rut").
+  if (exact) return result;
   // Segunda pasada: coincidencia por "contiene", sin reusar columnas ya asignadas.
   // El encabezado debe CONTENER un alias, o ser una abreviatura de >=3 letras del alias
   // (ej. "cod" -> "codigo"). El minimo evita falsos positivos: un valor cortisimo como
@@ -136,10 +139,10 @@ export function claveCodigo(valor) {
  * los campos requeridos. Util para saltar preambulos (p.ej. general.xls).
  * @returns {{ index:number, cols:Object<string,number> } | null}
  */
-export function findHeaderRow(matrix, aliasMap, requiredFields, maxScan = 20) {
+export function findHeaderRow(matrix, aliasMap, requiredFields, maxScan = 20, exact = false) {
   const limit = Math.min(matrix.length, maxScan);
   for (let i = 0; i < limit; i++) {
-    const cols = matchColumns(matrix[i], aliasMap);
+    const cols = matchColumns(matrix[i], aliasMap, exact);
     if (requiredFields.every((f) => cols[f] !== undefined)) {
       return { index: i, cols };
     }

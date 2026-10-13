@@ -51,7 +51,7 @@ const NAV = {
     { icon: 'bi-sliders', label: 'Configuracion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true, standalone: true },
     // Envio de correos (paquete "Solo envio de correos")
     { section: 'Correos', requiere: usaEnvioCorreos, oculto: true },
-    { icon: 'bi-person-lines-fill', label: 'Contactos', href: '#/admin/correos-contactos', requiere: usaEnvioCorreos, oculto: true },
+    { icon: 'bi-person-lines-fill', label: 'Clientes', href: '#/admin/correos-contactos', requiere: usaEnvioCorreos, oculto: true },
     { icon: 'bi-envelope-paper', label: 'Enviar quincena', href: '#/admin/correos-enviar', requiere: usaEnvioCorreos, oculto: true },
     { icon: 'bi-clock-history', label: 'Historial de envios', href: '#/admin/correos-historial', requiere: usaEnvioCorreos, oculto: true },
   ],

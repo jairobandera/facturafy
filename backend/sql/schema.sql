@@ -460,6 +460,7 @@ CREATE TABLE contacto_correo (
   clave       VARCHAR(100) NOT NULL,
   nombre      VARCHAR(255),
   email       VARCHAR(255),
+  direccion   VARCHAR(255),
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT uk_contacto_sucursal_clave UNIQUE (sucursal_id, clave),
   CONSTRAINT fk_contacto_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)

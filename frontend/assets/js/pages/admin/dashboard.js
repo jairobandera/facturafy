@@ -80,7 +80,7 @@ export async function adminDashboard() {
     if (envioCorreosOn) {
       content.append(h('h5', { class: 'fw-semibold mb-3 mt-2' }, 'Envío de correos'));
       content.append(h('div', { class: 'row g-3' }, [
-        col(quickCard('Contactos', 'bi-person-lines-fill', '#/admin/correos-contactos')),
+        col(quickCard('Clientes', 'bi-person-lines-fill', '#/admin/correos-contactos')),
         col(quickCard('Enviar quincena', 'bi-envelope-paper', '#/admin/correos-enviar')),
         col(quickCard('Historial de envíos', 'bi-clock-history', '#/admin/correos-historial')),
       ]));

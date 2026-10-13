@@ -67,7 +67,7 @@ function htmlEstado({ nombre, lineas, total, asunto, mensaje, sucursalNombre }) 
 export const envioCorreoService = {
   async listarContactos(sucursalId) {
     return query(
-      `SELECT id, clave, nombre, email FROM contacto_correo
+      `SELECT id, clave, nombre, email, direccion FROM contacto_correo
         WHERE sucursal_id = ? AND activo = 1 ORDER BY nombre, clave`,
       [sucursalId]
     );
@@ -85,11 +85,12 @@ export const envioCorreoService = {
       const clave = claveNorm(it.clave);
       const email = String(it.email ?? '').trim();
       const nombre = it.nombre ? String(it.nombre).trim() : null;
+      const direccion = it.direccion ? String(it.direccion).trim() : null;
       if (!clave || !EMAIL_RE.test(email)) { res.invalidos++; continue; }
       await query(
-        `INSERT INTO contacto_correo (sucursal_id, clave, nombre, email, activo) VALUES (?,?,?,?,1)
-         ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), email = VALUES(email), activo = 1`,
-        [sucursalId, clave, nombre, email]
+        `INSERT INTO contacto_correo (sucursal_id, clave, nombre, email, direccion, activo) VALUES (?,?,?,?,?,1)
+         ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), email = VALUES(email), direccion = VALUES(direccion), activo = 1`,
+        [sucursalId, clave, nombre, email, direccion]
       );
       if (existentes.has(clave)) res.actualizados++; else { res.agregados++; existentes.add(clave); }
     }

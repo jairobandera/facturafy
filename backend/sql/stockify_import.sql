@@ -476,6 +476,7 @@ CREATE TABLE contacto_correo (
   clave       VARCHAR(100) NOT NULL,
   nombre      VARCHAR(255),
   email       VARCHAR(255),
+  direccion   VARCHAR(255),
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT uk_contacto_sucursal_clave UNIQUE (sucursal_id, clave),
   CONSTRAINT fk_contacto_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)
@@ -544,11 +545,11 @@ INSERT INTO cotizacion (empresa_id, moneda, compra, venta, actualizado) VALUES
 -- cuenta_en_cualquier_sucursal: "empleado2" puede contar en las dos sucursales.
 -- "cajero" opera el punto de venta de la Sucursal Centro (paquete con facturacion).
 INSERT INTO usuario (id, nombre, apellido, nombre_usuario, contrasenia, rol, sucursal_id, cuenta_en_cualquier_sucursal) VALUES
-  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'SUPERADMINISTRADOR', 1, 0),
-  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'ADMINISTRADOR',      1, 0),
-  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'EMPLEADO',           1, 0),
-  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'EMPLEADO',           1, 1),
-  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$Zjnx3GElrhT7wiUObE5t6ePkJQ2TdVvG6JlBbURy9wclWf8IO06cq', 'CAJERO',             1, 0);
+  (1, 'Sofia',  'Perez',     'superadmin', '$2a$10$aqKbnlSRrmM.OW.LRjB3PuveGfaHfEuUqI5tN6h/9wLC.1PXkYj8C', 'SUPERADMINISTRADOR', 1, 0),
+  (2, 'Martin', 'Gomez',     'admin',      '$2a$10$aqKbnlSRrmM.OW.LRjB3PuveGfaHfEuUqI5tN6h/9wLC.1PXkYj8C', 'ADMINISTRADOR',      1, 0),
+  (3, 'Lucia',  'Fernandez', 'empleado',   '$2a$10$aqKbnlSRrmM.OW.LRjB3PuveGfaHfEuUqI5tN6h/9wLC.1PXkYj8C', 'EMPLEADO',           1, 0),
+  (4, 'Diego',  'Rodriguez', 'empleado2',  '$2a$10$aqKbnlSRrmM.OW.LRjB3PuveGfaHfEuUqI5tN6h/9wLC.1PXkYj8C', 'EMPLEADO',           1, 1),
+  (5, 'Carla',  'Lopez',     'cajero',     '$2a$10$aqKbnlSRrmM.OW.LRjB3PuveGfaHfEuUqI5tN6h/9wLC.1PXkYj8C', 'CAJERO',             1, 0);
 
 -- Cliente de ejemplo (Sucursal Centro) para probar la facturacion con RUT y credito.
 INSERT INTO cliente (id, rut, razon_social, nombre_fantasia, direccion, telefono, email, tipo_documento, limite_credito, sucursal_id) VALUES

@@ -20,18 +20,20 @@ const ALIAS = {
   clave: ['clave', 'rut', 'codigo', 'cedula', 'documento', 'id'],
   nombre: ['nombre', 'razonsocial', 'razon_social', 'cliente', 'nombre_cliente'],
   email: ['email', 'correo', 'mail', 'e-mail'],
+  direccion: ['direccion', 'domicilio', 'dir'],
 };
 // Para listados sin encabezado (ej. mezcla empresas/personas): los campos son compuestos
 // (ej. nombre = razón social O nombre+apellido) y se puede filtrar por una columna Tipo.
 const CAMPOS_CONTACTO = [
   { campo: 'nombre', label: 'Nombre (razón social o nombre+apellido)', requerido: true, compuesto: true },
-  { campo: 'clave', label: 'Clave (RUT / CI / código)', requerido: true, compuesto: true },
+  { campo: 'clave', label: 'Clave (RUT / CI / cuenta / código)', requerido: true, compuesto: true },
   { campo: 'email', label: 'Email', requerido: true, compuesto: true },
+  { campo: 'direccion', label: 'Dirección', requerido: false, compuesto: true },
 ];
 
 export function correosContactosPage() {
-  const content = renderShell('Contactos');
-  content.append(pageHeader('Contactos (envío de correos)',
+  const content = renderShell('Clientes');
+  content.append(pageHeader('Clientes (envío de correos)',
     'Lista de clientes a los que mandás el estado de cuenta. Cargala desde Excel.'));
 
   content.append(h('div', { class: 'sk-card p-3 mb-3' }, [
@@ -52,14 +54,17 @@ export function correosContactosPage() {
     if (!matriz || !matriz.length) return;
     // Con encabezado reconocible, como siempre; si no, asistente de mapeo (con perfiles).
     let filas = null;
-    const header = findHeaderRow(matriz, ALIAS, ['clave', 'email']);
+    // Deteccion EXACTA: estos listados no tienen encabezado y un dato cualquiera
+    // ("RUTA 3 KM 371") disparaba un falso positivo. La plantilla (Clave/Nombre/Email)
+    // si matchea exacto; el resto cae al asistente.
+    const header = findHeaderRow(matriz, ALIAS, ['clave', 'email'], 20, true);
     if (header) {
       const { index, cols } = header;
       const cell = (row, f) => (cols[f] !== undefined ? row[cols[f]] : null);
       filas = [];
       for (let i = index + 1; i < matriz.length; i++) {
         const row = matriz[i] || [];
-        filas.push({ clave: cell(row, 'clave'), email: cell(row, 'email'), nombre: cell(row, 'nombre') });
+        filas.push({ clave: cell(row, 'clave'), email: cell(row, 'email'), nombre: cell(row, 'nombre'), direccion: cell(row, 'direccion') });
       }
     } else {
       const map = await mapeoColumnas({ matriz, campos: CAMPOS_CONTACTO, empresaId: sucursalActual()?.empresaId, tipo: 'contactos', conFiltro: true });
@@ -73,9 +78,10 @@ export function correosContactosPage() {
       const clave = claveCodigo(f.clave);
       const email = String(f.email ?? '').trim();
       const nombre = String(f.nombre ?? '').trim() || null;
+      const direccion = String(f.direccion ?? '').trim() || null;
       if (!clave && !email) continue;               // fila vacía
       if (!clave || !EMAIL_RE.test(email)) { invalidos++; continue; }
-      items.push({ clave, nombre, email });
+      items.push({ clave, nombre, email, direccion });
     }
     if (!items.length) { ui.error('No se encontraron contactos válidos (revisá Clave y Email).'); return; }
 
@@ -119,9 +125,10 @@ export function correosContactosPage() {
           { key: 'clave', label: 'Clave' },
           { key: 'nombre', label: 'Nombre', render: (r) => r.nombre || '-' },
           { key: 'email', label: 'Email' },
+          { key: 'direccion', label: 'Dirección', render: (r) => r.direccion || '-' },
         ],
         rows,
-        searchKeys: ['clave', 'nombre', 'email'],
+        searchKeys: ['clave', 'nombre', 'email', 'direccion'],
         actions: [{ icon: 'bi-trash', title: 'Quitar', className: 'btn-outline-danger', onClick: borrar }],
       }));
     } catch (err) {
