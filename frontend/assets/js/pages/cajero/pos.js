@@ -547,7 +547,7 @@ async function abrirConversor(empresaId) {
 function generarComprobantePDF(venta) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(16); doc.text('Facturafy - Comprobante de venta', 14, 18);
+  doc.setFontSize(16); doc.text('Stockify - Comprobante de venta', 14, 18);
   doc.setFontSize(10);
   doc.text(`Venta #${venta.id}`, 14, 28);
   doc.text(`Fecha: ${fmt.dateTime(venta.fechaHora)}`, 14, 34);

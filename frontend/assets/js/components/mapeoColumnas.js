@@ -80,7 +80,10 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
       if (m.filaInicio != null) filaInicioInput.value = String(m.filaInicio);
       if (conFiltro && m.filtro) { filtroColSel.value = m.filtro.col != null ? String(m.filtro.col) : ''; filtroValInput.value = m.filtro.valor || ''; }
     };
-    perfilSel.addEventListener('change', () => aplicarPerfil(perfiles.find((p) => String(p.id) === perfilSel.value)));
+    perfilSel.addEventListener('change', () => {
+      aplicarPerfil(perfiles.find((p) => String(p.id) === perfilSel.value));
+      actualizarPerfilBtn.disabled = !perfilSel.value; // solo se puede actualizar un perfil elegido
+    });
 
     (async () => {
       if (!empresaId) return;
@@ -125,6 +128,21 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
       } catch (err) { errorBox.textContent = err.message; errorBox.classList.remove('d-none'); }
     });
 
+    // Actualiza el perfil YA elegido con el mapeo actual (reusa el upsert por nombre del
+    // backend). Asi un perfil guardado se puede corregir si cambiaste una columna.
+    const actualizarPerfilBtn = h('button', { class: 'btn btn-outline-primary btn-sm', type: 'button', disabled: true },
+      [h('i', { class: 'bi bi-arrow-repeat me-1' }), 'Actualizar perfil']);
+    actualizarPerfilBtn.addEventListener('click', async () => {
+      const p = perfiles.find((x) => String(x.id) === perfilSel.value);
+      if (!p) return;
+      errorBox.classList.add('d-none');
+      try {
+        await api.post('/import-perfiles', { empresaId, tipo, nombre: p.nombre, mapeo: leerMapeo() });
+        ui.toast(`Perfil "${p.nombre}" actualizado.`);
+        perfiles = await api.get(`/import-perfiles/empresa/${empresaId}?tipo=${encodeURIComponent(tipo || '')}`);
+      } catch (err) { errorBox.textContent = err.message; errorBox.classList.remove('d-none'); }
+    });
+
     // --- tabla de vista previa ---
     const thead = h('tr', {}, [h('th', { class: 'small text-muted' }, 'fila'),
       ...Array.from({ length: nCols }, (_, c) => h('th', { class: 'small' }, `Col ${c + 1}`))]);
@@ -148,7 +166,7 @@ export function mapeoColumnas({ matriz, campos, empresaId, tipo, conFiltro = fal
           h('div', { class: 'modal-body' }, [
             h('p', { class: 'text-muted small' }, 'Tu archivo no tiene encabezado reconocible. Indicá qué columna es cada campo y desde qué fila empiezan los datos. Podés guardar un perfil para reusarlo.'),
             h('div', { class: 'd-flex flex-wrap gap-2 align-items-center mb-3' }, [
-              h('span', { class: 'small text-muted' }, 'Perfil:'), perfilSel,
+              h('span', { class: 'small text-muted' }, 'Perfil:'), perfilSel, actualizarPerfilBtn,
               h('span', { class: 'text-muted' }, '·'), nombrePerfilInput, guardarPerfilBtn,
             ]),
             previewTable,

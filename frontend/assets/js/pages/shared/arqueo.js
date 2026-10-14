@@ -53,7 +53,7 @@ export function tarjetaArqueo({ turno, resumen }, titulo) {
 export function arqueoPDF({ turno, resumen }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(16); doc.text('Facturafy - Reporte de arqueo de turno', 14, 18);
+  doc.setFontSize(16); doc.text('Stockify - Reporte de arqueo de turno', 14, 18);
   doc.setFontSize(10);
   let y = 28;
   const linea = (t) => { doc.text(t, 14, y); y += 6; };

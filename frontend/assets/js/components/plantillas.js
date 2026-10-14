@@ -57,10 +57,10 @@ export const PLANTILLAS = {
     titulo: 'Contactos (correos)',
     icon: 'bi-person-lines-fill',
     archivo: 'plantilla_contactos_correo',
-    descripcion: 'Lista de clientes a los que mandar el estado de cuenta. Una fila por cliente. La Clave (RUT o código) se usa para cruzar con el estado de cuenta.',
+    descripcion: 'Lista de clientes a los que mandar el estado de cuenta. Una fila por cliente. La Clave (RUT/documento) identifica al cliente; la Cuenta (N° de cuenta corriente, opcional) es por la que suele cruzar el estado de cuenta.',
     filas: [
-      { Clave: '216000000013', Nombre: 'Comercio del Este S.R.L.', Email: 'ventas@eleste.com', Direccion: 'Av. Italia 3000' },
-      { Clave: 'CLI-002', Nombre: 'Juan Pérez', Email: 'juan.perez@example.com', Direccion: '18 de Julio 1234' },
+      { Clave: '216000000013', Cuenta: '12030', Nombre: 'Comercio del Este S.R.L.', Email: 'ventas@eleste.com', Direccion: 'Av. Italia 3000' },
+      { Clave: 'CLI-002', Cuenta: '', Nombre: 'Juan Pérez', Email: 'juan.perez@example.com', Direccion: '18 de Julio 1234' },
     ],
   },
   correosEstadoCuenta: {

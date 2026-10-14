@@ -46,7 +46,7 @@ function htmlEstado({ nombre, lineas, total, asunto, mensaje, sucursalNombre }) 
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:auto;color:#222">
     <h2 style="color:#2563eb;margin-bottom:4px">${esc(asunto || 'Estado de cuenta')}</h2>
-    <div style="color:#555;margin-bottom:12px">${esc(sucursalNombre || 'Facturafy')}</div>
+    <div style="color:#555;margin-bottom:12px">${esc(sucursalNombre || 'Stockify')}</div>
     <p>Estimado/a <b>${esc(nombre || 'cliente')}</b>,</p>
     <p>${esc(intro)}</p>
     <table style="border-collapse:collapse;width:100%;margin:8px 0">
@@ -60,14 +60,14 @@ function htmlEstado({ nombre, lineas, total, asunto, mensaje, sucursalNombre }) 
     <div style="background:#2563eb;color:#fff;padding:12px;border-radius:8px;text-align:right;font-size:18px;margin-top:10px">
       Total a pagar: <b>${money(total)}</b>
     </div>
-    <p style="color:#777;font-size:12px;margin-top:16px">Este es un mensaje automático de ${esc(sucursalNombre || 'Facturafy')}.</p>
+    <p style="color:#777;font-size:12px;margin-top:16px">Este es un mensaje automático de ${esc(sucursalNombre || 'Stockify')}.</p>
   </div>`;
 }
 
 export const envioCorreoService = {
   async listarContactos(sucursalId) {
     return query(
-      `SELECT id, clave, nombre, email, direccion FROM contacto_correo
+      `SELECT id, clave, cuenta, nombre, email, direccion FROM contacto_correo
         WHERE sucursal_id = ? AND activo = 1 ORDER BY nombre, clave`,
       [sucursalId]
     );
@@ -83,14 +83,17 @@ export const envioCorreoService = {
     const res = { agregados: 0, actualizados: 0, invalidos: 0 };
     for (const it of items) {
       const clave = claveNorm(it.clave);
+      const cuenta = it.cuenta ? claveNorm(it.cuenta) : null;
       const email = String(it.email ?? '').trim();
       const nombre = it.nombre ? String(it.nombre).trim() : null;
       const direccion = it.direccion ? String(it.direccion).trim() : null;
       if (!clave || !EMAIL_RE.test(email)) { res.invalidos++; continue; }
       await query(
-        `INSERT INTO contacto_correo (sucursal_id, clave, nombre, email, direccion, activo) VALUES (?,?,?,?,?,1)
-         ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), email = VALUES(email), direccion = VALUES(direccion), activo = 1`,
-        [sucursalId, clave, nombre, email, direccion]
+        // COALESCE en cuenta: un re-import que no traiga la columna no borra el N° ya guardado.
+        `INSERT INTO contacto_correo (sucursal_id, clave, cuenta, nombre, email, direccion, activo) VALUES (?,?,?,?,?,?,1)
+         ON DUPLICATE KEY UPDATE cuenta = COALESCE(VALUES(cuenta), cuenta),
+           nombre = VALUES(nombre), email = VALUES(email), direccion = VALUES(direccion), activo = 1`,
+        [sucursalId, clave, cuenta, nombre, email, direccion]
       );
       if (existentes.has(clave)) res.actualizados++; else { res.agregados++; existentes.add(clave); }
     }
@@ -117,7 +120,7 @@ export const envioCorreoService = {
          FROM sucursal WHERE id = ?`,
       [sucursalId]
     );
-    const sucursalNombre = sucRows[0]?.nombre || 'Facturafy';
+    const sucursalNombre = sucRows[0]?.nombre || 'Stockify';
     const smtp = resolverSmtp(sucRows[0]);
     if (!smtp) throw badRequest('El envío de correo no está configurado para esta sucursal (SMTP propio o global en el .env)');
     const transporter = construirTransporter(smtp);
@@ -125,11 +128,15 @@ export const envioCorreoService = {
     const respaldo = usaPropia ? smtpEnv() : null;
     const transporterRespaldo = respaldo ? construirTransporter(respaldo) : null;
 
-    // Mapa de contactos por clave normalizada.
+    // Mapa de contactos indexado por clave (RUT) Y por cuenta: el estado de cuenta
+    // cruza por el N° de cuenta, pero el contacto puede estar cargado con el RUT como
+    // clave. La clave tiene prioridad si una cuenta coincidiera con otra clave.
+    const contactosRows = await query(
+      `SELECT clave, cuenta, nombre, email FROM contacto_correo WHERE sucursal_id = ? AND activo = 1`, [sucursalId]
+    );
     const contactos = new Map();
-    for (const c of await query(
-      `SELECT clave, nombre, email FROM contacto_correo WHERE sucursal_id = ? AND activo = 1`, [sucursalId]
-    )) contactos.set(c.clave, c);
+    for (const c of contactosRows) if (c.clave && !contactos.has(c.clave)) contactos.set(c.clave, c);
+    for (const c of contactosRows) if (c.cuenta && !contactos.has(c.cuenta)) contactos.set(c.cuenta, c);
 
     const detalle = [];
     let enviados = 0, fallidos = 0, sinContacto = 0;

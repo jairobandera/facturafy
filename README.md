@@ -1,6 +1,6 @@
-# Facturafy
+# Stockify
 
-**Facturafy** es un sistema **multi-empresa** de **facturación y control de stock**.
+**Stockify** (v2.0.0) es un sistema **multi-empresa** de **facturación y control de stock**.
 Permite administrar empresas, sucursales, usuarios (con roles), categorías, productos, proveedores,
 lotes y **clientes**; **facturar en un punto de venta** (POS) con descuento automático de stock; y
 realizar **conteos de inventario colaborativos en tiempo real**, con reportes de diferencias.
@@ -206,10 +206,14 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `012-envio-correos.sql` — paquete "Solo envío de correos" (contactos + historial).
 > - `013-stock-decimal.sql` — stock con decimales (`DECIMAL(14,3)`, ej. litros).
 > - `014-import-perfiles.sql` — perfiles de mapeo de columnas para importar Excels.
+> - `015-contacto-direccion.sql` — dirección en los contactos de correo.
+> - `016-contacto-cuenta.sql` — N° de cuenta en los contactos de correo (cruce del estado de cuenta).
 >
 > ```bash
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/013-stock-decimal.sql
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/014-import-perfiles.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/015-contacto-direccion.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/016-contacto-cuenta.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente
@@ -231,7 +235,7 @@ El archivo incluye `CREATE DATABASE` + tablas + datos de ejemplo. Importalo:
 ## Estructura del proyecto
 
 ```
-Facturafy/
+Stockify/
 ├── backend/
 │   ├── server.js                 # Punto de entrada (HTTP + WebSocket)
 │   ├── sql/

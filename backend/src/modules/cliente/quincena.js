@@ -50,7 +50,7 @@ export function htmlEstadoCuenta(st, { desde, hasta, sucursalNombre } = {}) {
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:auto;color:#222">
     <h2 style="color:#2563eb;margin-bottom:4px">Estado de cuenta</h2>
-    <div style="color:#555;margin-bottom:12px">${esc(sucursalNombre || 'Facturafy')} · Quincena ${esc(periodo)}</div>
+    <div style="color:#555;margin-bottom:12px">${esc(sucursalNombre || 'Stockify')} · Quincena ${esc(periodo)}</div>
     <p>Estimado/a <b>${esc(nombre)}</b>${st.cliente.rut ? ` (${esc(st.cliente.tipoDocumento || 'RUT')}: ${esc(st.cliente.rut)})` : ''},</p>
     <p>Le enviamos el detalle de sus compras a crédito y el saldo a pagar.</p>
     <table style="border-collapse:collapse;width:100%;margin:8px 0">
@@ -65,7 +65,7 @@ export function htmlEstadoCuenta(st, { desde, hasta, sucursalNombre } = {}) {
     <div style="background:#2563eb;color:#fff;padding:12px;border-radius:8px;text-align:right;font-size:18px;margin-top:10px">
       Saldo total a pagar: <b>${money(st.saldo)}</b>
     </div>
-    <p style="color:#777;font-size:12px;margin-top:16px">Este es un mensaje automático de ${esc(sucursalNombre || 'Facturafy')}.</p>
+    <p style="color:#777;font-size:12px;margin-top:16px">Este es un mensaje automático de ${esc(sucursalNombre || 'Stockify')}.</p>
   </div>`;
 }
 
@@ -83,7 +83,7 @@ export async function enviarQuincena({ sucursalId, desde, hasta, clienteIds, usu
        FROM sucursal WHERE id = ?`,
     [sucursalId]
   );
-  const sucursalNombre = sucRows[0]?.nombre || 'Facturafy';
+  const sucursalNombre = sucRows[0]?.nombre || 'Stockify';
 
   const smtp = resolverSmtp(sucRows[0]);
   if (!smtp) {

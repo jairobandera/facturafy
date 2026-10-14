@@ -98,6 +98,15 @@ export function correosEnviarPage() {
 
   function resetear() { estados = []; clear(panel); }
 
+  // Indexa los contactos por clave (RUT) Y por N° de cuenta, para que el estado de
+  // cuenta los encuentre cruce por el que cruce. La clave tiene prioridad.
+  function indexarContactos(lista) {
+    const m = new Map();
+    for (const c of lista) { const k = claveCodigo(c.clave); if (k && !m.has(k)) m.set(k, c); }
+    for (const c of lista) { const k = claveCodigo(c.cuenta); if (k && !m.has(k)) m.set(k, c); }
+    return m;
+  }
+
   async function importar() {
     let matriz;
     try { matriz = await importFromExcelRaw(); } catch (err) { ui.error(`No se pudo leer el Excel: ${err.message}`); return; }
@@ -126,7 +135,7 @@ export function correosEnviarPage() {
     ui.loading('Cargando contactos...');
     try {
       const lista = await api.get(`/envio-correos/contactos/sucursal/${sucursalActiva()}`);
-      contactos = new Map(lista.map((c) => [claveCodigo(c.clave), c]));
+      contactos = indexarContactos(lista);
       ui.close();
     } catch (err) { ui.close(); ui.error(err.message); return; }
 
@@ -147,7 +156,7 @@ export function correosEnviarPage() {
     let lista;
     try { lista = await api.get(`/envio-correos/contactos/sucursal/${sucursalActiva()}`); ui.close(); }
     catch (err) { ui.close(); ui.error(err.message); return; }
-    contactos = new Map(lista.map((c) => [claveCodigo(c.clave), c]));
+    contactos = indexarContactos(lista);
 
     const clave = claveCodigo(st.clave);
     const c = contactos.get(clave);

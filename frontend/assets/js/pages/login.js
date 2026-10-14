@@ -51,7 +51,7 @@ export function loginPage() {
     h('div', { class: 'sk-login-card' }, [
       h('div', { class: 'sk-login-logo' }, [
         h('i', { class: 'bi bi-receipt-cutoff' }),
-        h('h1', {}, 'Facturafy'),
+        h('h1', {}, 'Stockify'),
         h('p', { class: 'text-muted mb-0' }, 'Facturación y control de stock'),
       ]),
       form,

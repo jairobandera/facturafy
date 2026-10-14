@@ -453,11 +453,13 @@ CREATE TABLE cliente_movimiento (
 -- ---------------- CONTACTO_CORREO (paquete "Solo envio de correos") ----------------
 -- Lista de contactos reutilizable, por sucursal, para el envio del estado de cuenta.
 -- Se carga/actualiza desde Excel (merge por `clave`). No tiene relacion con `cliente`.
--- `clave` se guarda normalizada (ver claveCodigo) para cruzar con el Excel de estado de cuenta.
+-- `clave` (RUT/documento) y `cuenta` (N° de cuenta) se guardan normalizadas (ver claveCodigo);
+-- el estado de cuenta cruza por cualquiera de las dos.
 CREATE TABLE contacto_correo (
   id          BIGINT AUTO_INCREMENT PRIMARY KEY,
   sucursal_id BIGINT NOT NULL,
   clave       VARCHAR(100) NOT NULL,
+  cuenta      VARCHAR(100),           -- N° de cuenta corriente (cruza el estado de cuenta; aparte del RUT)
   nombre      VARCHAR(255),
   email       VARCHAR(255),
   direccion   VARCHAR(255),

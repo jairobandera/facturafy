@@ -32,7 +32,7 @@ export function resolverSmtp(suc) {
       secure: suc.smtpSecure == null ? true : !!suc.smtpSecure,
       user: suc.smtpUser,
       pass: suc.smtpPass,
-      from: suc.smtpFrom || `${suc.nombre || 'Facturafy'} <${suc.smtpUser}>`,
+      from: suc.smtpFrom || `${suc.nombre || 'Stockify'} <${suc.smtpUser}>`,
     };
   }
   return smtpEnv();

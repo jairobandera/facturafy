@@ -1,7 +1,7 @@
 // Utilidades para leer el cuerpo de la peticion y escribir respuestas JSON.
 import { config } from '../config/env.js';
 
-const MAX_BODY = 12 * 1024 * 1024; // 12MB (las imagenes base64 pueden ser grandes)
+const MAX_BODY = 64 * 1024 * 1024; // 64MB (imagenes base64 + restauracion de la base completa)
 
 export function applyCors(res, req) {
   const origin = config.corsOrigin === '*' ? (req.headers.origin || '*') : config.corsOrigin;

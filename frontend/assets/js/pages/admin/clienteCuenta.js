@@ -278,7 +278,7 @@ function verDetalle(v, c) {
 function boletaPDF(v, c) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(16); doc.text('Facturafy - Boleta', 14, 18);
+  doc.setFontSize(16); doc.text('Stockify - Boleta', 14, 18);
   doc.setFontSize(10);
   doc.text(`Factura #${v.id}`, 14, 28);
   doc.text(`Fecha: ${fmt.dateTime(v.fechaHora)}`, 14, 34);

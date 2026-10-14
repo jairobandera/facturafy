@@ -34,6 +34,7 @@ import { configuracionFacturacionPage } from './pages/admin/configuracionFactura
 import { correosContactosPage } from './pages/admin/correosContactos.js';
 import { correosEnviarPage } from './pages/admin/correosEnviar.js';
 import { correosHistorialPage } from './pages/admin/correosHistorial.js';
+import { respaldoPage } from './pages/admin/respaldo.js';
 // Empleado
 import { empleadoDashboard } from './pages/empleado/dashboard.js';
 import { conteoLibreEmpleado, conteoCategoriasEmpleado } from './pages/empleado/conteos.js';
@@ -101,6 +102,8 @@ router.add('/admin/estadisticas-facturacion', page(estadisticasFacturacion), { r
 router.add('/admin/correos-contactos', page(correosContactosPage), { role: AD, requiere: usaEnvioCorreos });
 router.add('/admin/correos-enviar', page(correosEnviarPage), { role: AD, requiere: usaEnvioCorreos });
 router.add('/admin/correos-historial', page(correosHistorialPage), { role: AD, requiere: usaEnvioCorreos });
+// Respaldo: disponible en cualquier paquete (sin `requiere`).
+router.add('/admin/respaldo', page(respaldoPage), { role: AD });
 
 // ---- Empleado ----
 router.add('/empleado/dashboard', page(empleadoDashboard), { role: EM });

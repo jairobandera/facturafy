@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Facturafy** is a multi-company **facturación + control de stock** system. It started as a fork of
-Stockify 2.0 (inventory / stock-counting; the original lives in the sibling folder `../Stockify2.0`)
-and adds a billing module on top, on the same **zero-framework** stack. The API shape, endpoint paths
-and DTO field names from Stockify are preserved for compatibility; the API base is still
+**Stockify** (v2.0.0; the product was earlier called Facturafy) is a multi-company **facturación +
+control de stock** system. It started as a fork of Stockify 2.0 (inventory / stock-counting; the
+original lives in the sibling folder `../Stockify2.0`) and adds a billing module on top, on the same
+**zero-framework** stack. The API shape, endpoint paths and DTO field names from the original are
+preserved for compatibility; the API base is still
 `/Stockify/api/v1`.
 
 - **Backend**: raw Node.js (native `http` module, no Express) + `ws` for WebSocket + `mysql2` for
@@ -45,7 +46,8 @@ mysql -u <usuario> -p <base> < backend/sql/migrations/001-lote-afecta-stock.sql
 
 Test users (password `12345`): `superadmin` (SUPERADMINISTRADOR), `admin` (ADMINISTRADOR),
 `empleado` (EMPLEADO), `cajero` (CAJERO, Sucursal Centro con paquete de facturación). The DB name is
-`facturafy` (see `.env`), independent from the original Stockify DB.
+still `facturafy` (see `.env`) — kept as-is despite the product rename to avoid breaking existing
+installs — and is independent from the original Stockify 2.0 DB.
 
 ## Backend architecture
 
@@ -125,8 +127,11 @@ semicolon, pipe or whitespace — pasting "123, 456" must store two codes, not o
 prueban `findHeaderRow` (camino de siempre); si no hay encabezado reconocible, abren el **asistente de
 mapeo** `components/mapeoColumnas.js` (elegir qué columna es cada campo, fila de inicio, filtro de
 filas y campos compuestos), que puede **guardar/reusar perfiles** por empresa+tipo (tabla
-`import_perfil`, módulo `importPerfil`). `aplicarMapeo()` convierte la matriz cruda en filas de
-objetos. Esto es aditivo: los Excels con encabezado y las plantillas siguen igual.
+`import_perfil`, módulo `importPerfil`). El `POST /import-perfiles` hace **upsert por nombre**; el
+asistente tiene **"Guardar perfil"** (crea con un nombre nuevo) y **"Actualizar perfil"** (reescribe
+el perfil ya elegido con el mapeo actual, reusando ese mismo upsert). `aplicarMapeo()` convierte la
+matriz cruda en filas de objetos. Esto es aditivo: los Excels con encabezado y las plantillas siguen
+igual.
 
 `crearSimples` merges barcodes into a product that already exists instead of rejecting the row, and
 touches nothing else (price and stock belong to the stock Excel). It also **creates the categories**
@@ -277,12 +282,14 @@ cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /
 `/envio-correos` (paquete solo-correos: `GET|POST /contactos/sucursal/:id`, `DELETE /contactos/:id`,
 `POST /enviar/sucursal/:id`, `GET /sucursal/:id` historial, `GET /:id` detalle del lote) y
 `/import-perfiles` (perfiles de mapeo de columnas por empresa+tipo: `GET /empresa/:id?tipo=`, `POST /`,
-`DELETE /:id`).
+`DELETE /:id`) y `/respaldo` (respaldo/restauración de **toda** la base: `GET /` devuelve un JSON con
+todas las tablas; `POST /restaurar` reemplaza los datos actuales dentro de una transacción — ver
+Respaldo abajo).
 `/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
 active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
 devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).
 
-## Facturación (módulo nuevo de Facturafy)
+## Facturación (módulo nuevo de Stockify)
 
 **Paquetes por sucursal.** Two flags on `sucursal` decide what each branch has, set by the superadmin
 in **Configuraciones** (`#/superadmin/configuraciones`, saved via `PUT /sucursales/:id`):
@@ -371,8 +378,12 @@ nombre/imagen/precio y 403 si no está habilitado). Los endpoints son públicos 
 **Paquete "Solo envío de correos" (`src/modules/envioCorreo/`).** Para negocios que ya tienen su
 sistema y solo quieren automatizar el envío de la quincena por email, cargando los datos desde Excel
 (no usan la facturación de la app ni la tabla `cliente`). Flag `sucursal.usa_envio_correos`. Dos
-insumos: (1) **contactos** (`contacto_correo`: clave/nombre/email, por sucursal, reutilizable, merge
-por clave) que se cargan desde Excel; (2) **estado de cuenta** por quincena (Excel con una fila por
+insumos: (1) **contactos** (`contacto_correo`: clave/cuenta/nombre/email/direccion, por sucursal,
+reutilizable, merge por `clave`) que se cargan desde Excel — `clave` suele ser el RUT/documento y
+`cuenta` el **N° de cuenta corriente** (opcional), guardado aparte porque el informe de estado de
+cuenta cruza por la cuenta; el cruce (front `indexarContactos`, back `enviar`) indexa por **clave Y
+cuenta** (clave con prioridad), así encuentra al cliente por cualquiera de las dos (migración 016);
+(2) **estado de cuenta** por quincena (Excel con una fila por
 ítem), que el front agrupa por **clave** y manda como `estados: [{clave, lineas:[{concepto,fecha,
 monto}], total}]`. El backend cruza por clave contra `contacto_correo`, arma el HTML con la tabla y
 envía (reusa `mailer.js#resolverSmtp` + `enviarConFallback`, el helper extraído del flujo de la
@@ -383,13 +394,28 @@ quincena de facturación). Guarda historial en `envio_correo` + `envio_correo_de
 `correosEnviar.js` tiene un **2º modo "estado de cuenta de un cliente"** que parsea un informe
 por-cliente (titular + cuenta en el preámbulo, conceptos y Total) y lo manda a ese cliente; si la
 cuenta no está en contactos, se pide el email a mano (`enviar` acepta `email`/`nombre` en el `estado`
-como fallback cuando no hay contacto). Los contactos se pueden cargar desde `clientes.xlsx` con el
-asistente (filtro Tipo=Cliente, clave compuesta RUT/CI o la cuenta, nombre = razón social o nom+ape).
+como fallback cuando no hay contacto). Los clientes se pueden cargar desde `clientes.xlsx` con el
+asistente, que para este import usa **una sola columna por campo** (sin columnas compuestas ni filtro
+de filas, a propósito, para no confundir): clave, nombre, email (obligatorios) y dirección (opcional).
+Las filas sin email válido se omiten (no se les puede enviar el correo) y el resumen de importación
+las cuenta aparte.
 
 **Correo SMTP por sucursal con respaldo.** Las credenciales viven en `sucursal.smtp_*` (las carga el
 superadmin en el form de sucursal; `smtp_pass` solo se devuelve al editar). `mailer.js#resolverSmtp`
 usa la casilla de la sucursal y, si no tiene, la global del `.env`. En `enviarQuincena`, si el envío
 con la casilla propia falla, **reintenta con el SMTP global del `.env`** como respaldo.
+
+**Respaldo/restauración de la base (`src/modules/respaldo/`).** Copia de seguridad completa, sin
+depender de `mysqldump` ni binarios: `exportar()` recorre `SHOW TABLES` y hace `SELECT *` de cada una,
+devolviendo `{ app, version, fecha, tablas:{ tabla:[filas] } }`; el front lo baja como
+`stockify-respaldo-YYYY-MM-DD.json` (`components/respaldo.js#bloqueRespaldo`). `importar()` **reemplaza
+todo** dentro de una transacción: `SET FOREIGN_KEY_CHECKS=0`, `DELETE` + `INSERT` por lotes de cada
+tabla **conocida** de la base actual (filtra por `SHOW TABLES` y valida nombres con regex → no hay
+inyección por nombre ni tablas ajenas), y restaura los FK en `finally`. Solo rol ADMINISTRADOR o
+SUPERADMINISTRADOR (guard server-side `assertRol` por `ctx.user.rol`, además del guard del front). En
+el front está en **Respaldo** (`#/admin/respaldo`, ítem de NAV **siempre visible** para el admin, sin
+`requiere`, así lo tienen todos los paquetes) y en `#/superadmin/configuraciones`; el restore pide
+escribir "RESTAURAR". `MAX_BODY` (`core/http.js`) se subió a 64MB para el upload del restore.
 
 **Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
 every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op
