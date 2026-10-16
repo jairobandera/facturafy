@@ -1,5 +1,6 @@
 // Promociones: precio especial para una lista de productos, por sucursal, con vigencia.
-// Solo para el paquete completo (facturacion + control de stock). Mientras la promo esta
+// Para cualquier sucursal con facturacion (Completo, Facturacion+stock o Solo facturacion).
+// Mientras la promo esta
 // vigente (por fecha), cada producto de su lista se vende a `precio` en el POS; el precio
 // server-side lo aplica venta.service usando `preciosVigentes`.
 import { Router } from '../../core/router.js';

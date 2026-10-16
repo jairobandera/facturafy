@@ -1,6 +1,6 @@
 // Promociones (administrador): precio especial para una lista de productos, por sucursal,
-// con vigencia (desde/hasta; sin "hasta" = hasta que el admin la dé de baja). Solo paquete
-// completo. Mientras está vigente, esos productos se cobran al precio de la promo en el POS.
+// con vigencia (desde/hasta; sin "hasta" = hasta que el admin la dé de baja). Para cualquier
+// paquete con facturación. Mientras está vigente, esos productos se cobran al precio de la promo.
 import { h, clear } from '../../core/dom.js';
 import { api } from '../../core/api.js';
 import { ui, fmt } from '../../core/ui.js';

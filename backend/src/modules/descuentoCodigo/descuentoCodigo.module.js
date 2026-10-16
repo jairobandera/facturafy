@@ -1,5 +1,5 @@
 // Codigos de descuento de un solo uso, por sucursal. El admin los crea; el cajero los
-// aplica en el POS (un % o un monto fijo sobre el total). Solo paquete completo.
+// aplica en el POS (un % o un monto fijo sobre el total). Cualquier paquete con facturacion.
 // El consumo real (marcar usado) ocurre dentro de la transaccion de la venta.
 import { Router } from '../../core/router.js';
 import { query } from '../../config/db.js';

@@ -1,6 +1,6 @@
 // Códigos de descuento (administrador): códigos de UN SOLO USO que el cajero aplica en
 // el POS (un % o un monto fijo sobre el total). Por sucursal, con vencimiento opcional y
-// baja manual. Solo paquete completo. El admin ve si están vigentes, usados o vencidos.
+// baja manual. Para cualquier paquete con facturación. El admin ve si están vigentes/usados/vencidos.
 import { h, clear } from '../../core/dom.js';
 import { api } from '../../core/api.js';
 import { ui, fmt } from '../../core/ui.js';

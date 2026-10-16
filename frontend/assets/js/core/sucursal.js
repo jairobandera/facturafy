@@ -131,9 +131,9 @@ export function usaEnvioCorreos() {
 }
 
 /**
- * Promos y descuentos: solo el paquete completo (facturación Y control de stock).
- * Si falta cualquiera de los dos, la función no se ofrece.
+ * Promos y descuentos: cualquier sucursal con facturación (Completo, Facturación +
+ * stock, o Solo facturación). Los paquetes sin facturación no la ofrecen.
  */
 export function usaPromos() {
-  return usaStock() && usaFacturacion();
+  return usaFacturacion();
 }

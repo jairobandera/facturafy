@@ -421,10 +421,11 @@ el front está en **Respaldo** (`#/admin/respaldo`, ítem de NAV **siempre visib
 `requiere`, así lo tienen todos los paquetes) y en `#/superadmin/configuraciones`; el restore pide
 escribir "RESTAURAR". `MAX_BODY` (`core/http.js`) se subió a 64MB para el upload del restore.
 
-**Promos y descuentos (`src/modules/promocion/`, `src/modules/descuentoCodigo/`).** Solo para el
-paquete **completo** (facturación Y control de stock): guard `assertUsaPromos` (back) / `usaPromos()`
-(front, = `usaStock() && usaFacturacion()`). Los demás paquetes no ven la sección en el NAV (no se
-muestra ni deshabilitada). En el NAV admin hay una sección colapsable **"Promos y descuentos"** con
+**Promos y descuentos (`src/modules/promocion/`, `src/modules/descuentoCodigo/`).** Para cualquier
+sucursal **con facturación** (Completo, Facturación + stock, o Solo facturación): guard
+`assertUsaPromos` (back) / `usaPromos()` (front, = `usaFacturacion()`). Los paquetes sin facturación
+(solo stock, solo correos, correo + stock) no ven la sección en el NAV (no se muestra ni
+deshabilitada). En el NAV admin hay una sección colapsable **"Promos y descuentos"** con
 Promociones y Códigos de descuento (`#/admin/promociones`, `#/admin/descuentos`), ambas con
 `requiere: usaPromos`.
 - **Promociones** (`promocion` + `promocion_producto`): precio especial para una **lista de productos**,

@@ -42,12 +42,12 @@ export async function assertUsaEnvioCorreos(sucursalId) {
 }
 
 /**
- * Promos y descuentos: solo para el paquete COMPLETO (facturacion Y control de stock).
- * Los demas paquetes no tienen esta funcion.
+ * Promos y descuentos: para cualquier sucursal con facturacion (Completo,
+ * Facturacion + stock, o Solo facturacion). Los paquetes sin facturacion no la tienen.
  */
 export async function assertUsaPromos(sucursalId) {
   const flags = await flagsDeSucursal(sucursalId);
-  if (!flags.usaFacturacion || !flags.usaStock) {
-    throw forbidden('Las promos y descuentos requieren el paquete completo (facturación + control de stock)');
+  if (!flags.usaFacturacion) {
+    throw forbidden('Las promos y descuentos requieren el paquete de facturación');
   }
 }

@@ -436,8 +436,8 @@ CREATE TABLE venta_detalle (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- PROMOCIONES (precio especial por lista de productos) ----------------
--- Solo paquete completo. Mientras la promo esta vigente, cada producto de su lista se
--- vende a `precio`. Vigencia por fecha (hasta NULL = sin fin / baja manual).
+-- Cualquier sucursal con facturacion. Mientras la promo esta vigente, cada producto de su
+-- lista se vende a `precio`. Vigencia por fecha (hasta NULL = sin fin / baja manual).
 CREATE TABLE promocion (
   id          BIGINT AUTO_INCREMENT PRIMARY KEY,
   sucursal_id BIGINT NOT NULL,
