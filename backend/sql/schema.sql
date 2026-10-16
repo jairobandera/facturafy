@@ -5,6 +5,9 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS import_perfil;
+DROP TABLE IF EXISTS descuento_codigo;
+DROP TABLE IF EXISTS promocion_producto;
+DROP TABLE IF EXISTS promocion;
 DROP TABLE IF EXISTS envio_correo_detalle;
 DROP TABLE IF EXISTS envio_correo;
 DROP TABLE IF EXISTS contacto_correo;
@@ -374,7 +377,11 @@ CREATE TABLE venta (
   cliente_id           BIGINT,              -- NULL = consumidor final
   consumidor_final     BOOLEAN NOT NULL DEFAULT TRUE,
   subtotal             FLOAT NOT NULL DEFAULT 0,
-  descuento            FLOAT NOT NULL DEFAULT 0,
+  descuento            FLOAT NOT NULL DEFAULT 0,          -- monto del descuento aplicado (codigo)
+  descuento_codigo_id  BIGINT,                            -- codigo de descuento usado (si hubo)
+  descuento_codigo     VARCHAR(60),                       -- snapshot del codigo
+  descuento_tipo       VARCHAR(20),                       -- PORCENTAJE | MONTO (snapshot)
+  descuento_valor      DECIMAL(14,3),                     -- valor del codigo (snapshot)
   total                FLOAT NOT NULL DEFAULT 0,
   forma_pago           VARCHAR(20) NOT NULL DEFAULT 'CONTADO', -- CONTADO | CREDITO
   -- Moneda de cobro. El total "oficial" (subtotal/total) SIEMPRE esta en UYU; cuando
@@ -426,6 +433,48 @@ CREATE TABLE venta_detalle (
   subtotal        FLOAT NOT NULL DEFAULT 0,
   CONSTRAINT fk_vd_venta    FOREIGN KEY (venta_id)    REFERENCES venta(id) ON DELETE CASCADE,
   CONSTRAINT fk_vd_producto FOREIGN KEY (producto_id) REFERENCES producto(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- PROMOCIONES (precio especial por lista de productos) ----------------
+-- Solo paquete completo. Mientras la promo esta vigente, cada producto de su lista se
+-- vende a `precio`. Vigencia por fecha (hasta NULL = sin fin / baja manual).
+CREATE TABLE promocion (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id BIGINT NOT NULL,
+  nombre      VARCHAR(255) NOT NULL,
+  precio      DECIMAL(14,3) NOT NULL,
+  fecha_desde DATE,
+  fecha_hasta DATE,
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  INDEX idx_promocion_sucursal (sucursal_id, activo),
+  CONSTRAINT fk_promocion_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE promocion_producto (
+  id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+  promocion_id BIGINT NOT NULL,
+  producto_id  BIGINT NOT NULL,
+  CONSTRAINT uk_promoprod UNIQUE (promocion_id, producto_id),
+  CONSTRAINT fk_promoprod_promo    FOREIGN KEY (promocion_id) REFERENCES promocion(id) ON DELETE CASCADE,
+  CONSTRAINT fk_promoprod_producto FOREIGN KEY (producto_id)  REFERENCES producto(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- CODIGOS DE DESCUENTO (un solo uso, aplicados en el POS) ----------------
+CREATE TABLE descuento_codigo (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  sucursal_id    BIGINT NOT NULL,
+  codigo         VARCHAR(60) NOT NULL,
+  tipo           VARCHAR(20) NOT NULL,          -- PORCENTAJE | MONTO
+  valor          DECIMAL(14,3) NOT NULL,
+  fecha_desde    DATE,
+  fecha_hasta    DATE,                          -- vencimiento (NULL = sin vencimiento)
+  usado          BOOLEAN NOT NULL DEFAULT FALSE,
+  usado_venta_id BIGINT,
+  usado_fecha    DATETIME,
+  activo         BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uk_descuento_sucursal_codigo UNIQUE (sucursal_id, codigo),
+  CONSTRAINT fk_descuento_sucursal FOREIGN KEY (sucursal_id) REFERENCES sucursal(id),
+  CONSTRAINT fk_descuento_venta    FOREIGN KEY (usado_venta_id) REFERENCES venta(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- CLIENTE_MOVIMIENTO (cuenta corriente) ----------------

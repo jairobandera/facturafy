@@ -23,6 +23,8 @@ import { envioCorreoRoutes } from './modules/envioCorreo/envioCorreo.module.js';
 import { importPerfilRoutes } from './modules/importPerfil/importPerfil.module.js';
 import { estadisticaVentaRoutes } from './modules/estadisticaVenta/estadisticaVenta.module.js';
 import { respaldoRoutes } from './modules/respaldo/respaldo.module.js';
+import { promocionRoutes } from './modules/promocion/promocion.module.js';
+import { descuentoCodigoRoutes } from './modules/descuentoCodigo/descuentoCodigo.module.js';
 
 export function buildApiRouter() {
   const api = new Router();
@@ -49,5 +51,7 @@ export function buildApiRouter() {
   api.use('/import-perfiles', importPerfilRoutes);
   api.use('/estadisticas-venta', estadisticaVentaRoutes);
   api.use('/respaldo', respaldoRoutes);
+  api.use('/promociones', promocionRoutes);
+  api.use('/descuentos', descuentoCodigoRoutes);
   return api;
 }

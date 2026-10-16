@@ -40,3 +40,14 @@ export async function assertUsaEnvioCorreos(sucursalId) {
     throw forbidden('El paquete de envio de correos no esta habilitado para esta sucursal');
   }
 }
+
+/**
+ * Promos y descuentos: solo para el paquete COMPLETO (facturacion Y control de stock).
+ * Los demas paquetes no tienen esta funcion.
+ */
+export async function assertUsaPromos(sucursalId) {
+  const flags = await flagsDeSucursal(sucursalId);
+  if (!flags.usaFacturacion || !flags.usaStock) {
+    throw forbidden('Las promos y descuentos requieren el paquete completo (facturación + control de stock)');
+  }
+}

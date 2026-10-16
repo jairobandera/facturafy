@@ -2,7 +2,7 @@
 import { router } from './core/router.js';
 import { auth } from './core/auth.js';
 import { runCleanups } from './core/lifecycle.js';
-import { cargarSucursal, usaLotes, usaStock, usaFacturacion, usaEnvioCorreos } from './core/sucursal.js';
+import { cargarSucursal, usaLotes, usaStock, usaFacturacion, usaEnvioCorreos, usaPromos } from './core/sucursal.js';
 import { ui } from './core/ui.js';
 
 import { loginPage } from './pages/login.js';
@@ -35,6 +35,8 @@ import { correosContactosPage } from './pages/admin/correosContactos.js';
 import { correosEnviarPage } from './pages/admin/correosEnviar.js';
 import { correosHistorialPage } from './pages/admin/correosHistorial.js';
 import { respaldoPage } from './pages/admin/respaldo.js';
+import { promocionesPage } from './pages/admin/promociones.js';
+import { descuentosPage } from './pages/admin/descuentos.js';
 // Empleado
 import { empleadoDashboard } from './pages/empleado/dashboard.js';
 import { conteoLibreEmpleado, conteoCategoriasEmpleado } from './pages/empleado/conteos.js';
@@ -102,6 +104,9 @@ router.add('/admin/estadisticas-facturacion', page(estadisticasFacturacion), { r
 router.add('/admin/correos-contactos', page(correosContactosPage), { role: AD, requiere: usaEnvioCorreos });
 router.add('/admin/correos-enviar', page(correosEnviarPage), { role: AD, requiere: usaEnvioCorreos });
 router.add('/admin/correos-historial', page(correosHistorialPage), { role: AD, requiere: usaEnvioCorreos });
+// Promos y descuentos: solo paquete completo (facturación + control de stock).
+router.add('/admin/promociones', page(promocionesPage), { role: AD, requiere: usaPromos });
+router.add('/admin/descuentos', page(descuentosPage), { role: AD, requiere: usaPromos });
 // Respaldo: disponible en cualquier paquete (sin `requiere`).
 router.add('/admin/respaldo', page(respaldoPage), { role: AD });
 

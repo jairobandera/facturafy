@@ -1,7 +1,7 @@
 // Renderiza el "shell" de la aplicacion (sidebar + topbar) y provee el area de contenido.
 import { h, clear } from './dom.js';
 import { auth } from './auth.js';
-import { usaLotes, usaStock, usaFacturacion, usaEnvioCorreos } from './sucursal.js';
+import { usaLotes, usaStock, usaFacturacion, usaEnvioCorreos, usaPromos } from './sucursal.js';
 
 // El inventario (productos/categorias/proveedores) solo tiene sentido con stock o
 // facturacion; en el paquete "solo envio de correos" se oculta por completo.
@@ -47,6 +47,10 @@ const NAV = {
     { icon: 'bi-receipt', label: 'Ventas realizadas', href: '#/admin/ventas', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-clock-history', label: 'Turnos', href: '#/admin/turnos', requiere: usaFacturacion, oculto: true },
     { icon: 'bi-bar-chart-line', label: 'Estadisticas de facturacion', href: '#/admin/estadisticas-facturacion', requiere: usaFacturacion, oculto: true },
+    // Promos y descuentos (solo paquete completo: facturacion + control de stock)
+    { section: 'Promos y descuentos', requiere: usaPromos, oculto: true },
+    { icon: 'bi-tags-fill', label: 'Promociones', href: '#/admin/promociones', requiere: usaPromos, oculto: true },
+    { icon: 'bi-ticket-perforated', label: 'Códigos de descuento', href: '#/admin/descuentos', requiere: usaPromos, oculto: true },
     // Envio de correos (paquete "Solo envio de correos")
     { section: 'Correos', requiere: usaEnvioCorreos, oculto: true },
     { icon: 'bi-person-lines-fill', label: 'Clientes', href: '#/admin/correos-contactos', requiere: usaEnvioCorreos, oculto: true },

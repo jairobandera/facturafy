@@ -11,7 +11,7 @@ import { renderShell } from '../../core/layout.js';
 import { router } from '../../core/router.js';
 import { pageHeader, spinner } from '../../components/page.js';
 import { manualSearch, findByCode } from '../../components/barcode.js';
-import { sucursalActiva, sucursalActual } from '../../core/sucursal.js';
+import { sucursalActiva, sucursalActual, usaPromos } from '../../core/sucursal.js';
 import { cargarTurnoActivo, soyMiembro } from '../../core/turno.js';
 import { resolveUsuarioId } from '../shared/session.js';
 import { onCleanup } from '../../core/lifecycle.js';
@@ -25,6 +25,7 @@ export async function posPage() {
   content.append(loading);
 
   const productosById = new Map();
+  const promoPrecio = new Map(); // productoId -> precio especial vigente (promos)
   let usuarioId = null;
   let turno = null;
   try {
@@ -35,6 +36,14 @@ export async function posPage() {
       api.get(`/productos/sucursal/${sucursalId}/activos`),
     ]);
     for (const p of productos) productosById.set(p.id, p);
+    // Precios de promo vigentes (solo paquete completo). El backend igual los aplica
+    // al facturar; esto es para mostrarlos en el carrito.
+    if (usaPromos()) {
+      try {
+        const vig = await api.get(`/promociones/vigentes/sucursal/${sucursalId}`);
+        for (const r of vig) promoPrecio.set(Number(r.productoId), Number(r.precio));
+      } catch { /* sin promos */ }
+    }
   } catch (err) {
     loading.remove();
     content.append(h('div', { class: 'alert alert-danger' }, `No se pudo cargar el punto de venta: ${err.message}`));
@@ -55,7 +64,17 @@ export async function posPage() {
   let formaPago = 'CONTADO';
   let moneda = 'UYU';        // moneda de cobro
   let cotizacion = 1;        // UYU por 1 unidad de `moneda`
+  let descuentoAplicado = null; // { codigo, tipo, valor } del código aplicado
   const empresaId = sucursalActual()?.empresaId;
+
+  // Precio efectivo del producto: el de la promo vigente si está, si no el normal.
+  const precioDe = (p) => (promoPrecio.has(Number(p.id)) ? promoPrecio.get(Number(p.id)) : Number(p.precio));
+  const montoDescuento = (subtotal) => {
+    if (!descuentoAplicado) return 0;
+    const v = Number(descuentoAplicado.valor) || 0;
+    const m = descuentoAplicado.tipo === 'PORCENTAJE' ? subtotal * v / 100 : v;
+    return Math.min(round2(m), subtotal);
+  };
 
   content.append(pageHeader('Punto de venta', `Turno ${turno.numeroLabel} · pasá un producto por el lector o buscalo.`, [
     h('button', { class: 'btn btn-outline-secondary', onClick: () => abrirConversor(empresaId) },
@@ -123,6 +142,33 @@ export async function posPage() {
   ]);
   const comentarioInput = h('textarea', { class: 'form-control', rows: 2, placeholder: 'Comentario (opcional, sale en la boleta)' });
 
+  // ---- Código de descuento (solo paquete completo) ----
+  const descEl = h('span', { class: 'fw-semibold text-success' }, fmt.money(0));
+  const descRow = h('div', { class: 'd-flex justify-content-between mb-1 d-none' }, [
+    h('span', { class: 'text-success' }, [h('i', { class: 'bi bi-ticket-perforated me-1' }), 'Descuento']), descEl,
+  ]);
+  const codigoInput = h('input', { class: 'form-control form-control-sm', placeholder: 'Código de descuento', autocomplete: 'off' });
+  const aplicarDescBtn = h('button', { class: 'btn btn-outline-primary btn-sm', type: 'button' }, 'Aplicar');
+  const quitarDescBtn = h('button', { class: 'btn btn-outline-secondary btn-sm d-none', type: 'button' }, 'Quitar');
+  aplicarDescBtn.addEventListener('click', aplicarDescuento);
+  quitarDescBtn.addEventListener('click', () => { descuentoAplicado = null; codigoInput.value = ''; codigoInput.disabled = false; aplicarDescBtn.classList.remove('d-none'); quitarDescBtn.classList.add('d-none'); actualizarTotales(); });
+  const descCodeRow = h('div', { class: 'd-flex align-items-center gap-2 mb-2' }, [codigoInput, aplicarDescBtn, quitarDescBtn]);
+
+  async function aplicarDescuento() {
+    const codigo = codigoInput.value.trim();
+    if (!codigo) return;
+    if (carrito.size === 0) { ui.error('Agregá productos antes de aplicar un descuento.'); return; }
+    ui.loading('Validando código...');
+    try {
+      const r = await api.get(`/descuentos/validar/sucursal/${sucursalId}?codigo=${encodeURIComponent(codigo)}`);
+      ui.close();
+      descuentoAplicado = { codigo: r.codigo, tipo: r.tipo, valor: Number(r.valor) };
+      codigoInput.value = r.codigo; codigoInput.disabled = true;
+      aplicarDescBtn.classList.add('d-none'); quitarDescBtn.classList.remove('d-none');
+      actualizarTotales();
+    } catch (err) { ui.close(); ui.error(err.message); }
+  }
+
   pagoSelect.addEventListener('change', (e) => {
     formaPago = e.target.value;
     // El crédito se registra siempre en pesos (la deuda es en UYU).
@@ -139,6 +185,8 @@ export async function posPage() {
 
   const totalesCard = h('div', { class: 'sk-card p-3' }, [
     h('div', { class: 'd-flex justify-content-between mb-1' }, [h('span', { class: 'text-muted' }, 'Subtotal'), subtotalEl]),
+    usaPromos() ? descCodeRow : null,
+    descRow,
     h('div', { class: 'd-flex justify-content-between align-items-center mb-1' }, [h('span', {}, 'Total'), totalEl]),
     cotizInfo,
     h('div', { class: 'd-flex align-items-center justify-content-between gap-2 mb-2' }, [
@@ -225,7 +273,7 @@ export async function posPage() {
   async function agregarAlCarrito(producto) {
     const existente = carrito.get(producto.id);
     const stockDisponible = Number(producto.cantidadStock);
-    const cantidad = await askCantidadVenta(producto, existente?.cantidad);
+    const cantidad = await askCantidadVenta(producto, existente?.cantidad, precioDe(producto));
     if (cantidad == null) return;
     carrito.set(producto.id, { producto, cantidad });
     if (cantidad > stockDisponible) ui.toast('Ojo: la cantidad supera el stock disponible.', 'warning');
@@ -244,7 +292,9 @@ export async function posPage() {
         'El carrito está vacío. Pasá un producto por el lector o buscalo.')]));
     } else {
       for (const { producto, cantidad } of carrito.values()) {
-        const sub = Number(producto.precio) * cantidad;
+        const pu = precioDe(producto);
+        const enPromo = promoPrecio.has(Number(producto.id));
+        const sub = pu * cantidad;
         const input = h('input', {
           class: 'form-control form-control-sm text-center mx-auto', type: 'number', min: 1,
           value: cantidad, style: { maxWidth: '90px' },
@@ -257,8 +307,12 @@ export async function posPage() {
         });
         tbody.append(h('tr', {}, [
           h('td', {}, [h('div', { class: 'fw-semibold' }, producto.nombre),
-            h('div', { class: 'text-muted small' }, `Cód: ${producto.codigoProducto}`)]),
-          h('td', { class: 'text-end' }, fmt.money(producto.precio)),
+            h('div', { class: 'text-muted small' }, [`Cód: ${producto.codigoProducto}`,
+              enPromo ? h('span', { class: 'badge bg-success ms-2' }, 'Promo') : null])]),
+          h('td', { class: 'text-end' }, enPromo
+            ? h('div', {}, [h('div', {}, fmt.money(pu)),
+                h('del', { class: 'text-muted small' }, fmt.money(producto.precio))])
+            : fmt.money(pu)),
           h('td', { class: 'text-center' }, input),
           h('td', { class: 'text-end' }, fmt.money(sub)),
           h('td', { class: 'text-end' }, [h('button', {
@@ -270,16 +324,26 @@ export async function posPage() {
     actualizarTotales();
   }
 
-  function totalVenta() {
+  // Suma de renglones (con precio de promo) en UYU, antes del descuento.
+  function subtotalVenta() {
     let total = 0;
-    for (const { producto, cantidad } of carrito.values()) total += Number(producto.precio) * cantidad;
-    return total;
+    for (const { producto, cantidad } of carrito.values()) total += precioDe(producto) * cantidad;
+    return round2(total);
+  }
+  // Total a cobrar en UYU: subtotal menos el descuento del código.
+  function totalVenta() {
+    const sub = subtotalVenta();
+    return round2(sub - montoDescuento(sub));
   }
 
   function actualizarTotales() {
-    const total = totalVenta();                                   // UYU
+    const subtotal = subtotalVenta();                             // UYU
+    const desc = montoDescuento(subtotal);
+    const total = round2(subtotal - desc);                        // UYU
     const totalMoneda = moneda === 'UYU' ? total : round2(total / cotizacion);
-    subtotalEl.textContent = fmt.money(total);
+    subtotalEl.textContent = fmt.money(subtotal);
+    descRow.classList.toggle('d-none', desc <= 0);
+    descEl.textContent = `- ${fmt.money(desc)}`;
     totalEl.textContent = fmtMon(totalMoneda, moneda);
     if (moneda === 'UYU') {
       cotizInfo.classList.add('d-none'); cotizInfo.textContent = '';
@@ -375,6 +439,7 @@ export async function posPage() {
       const venta = await api.post('/ventas', {
         sucursalId, turnoId: turno.id, usuarioId, clienteId: cliente?.id ?? null, formaPago,
         monedaPago: moneda, efectivoRecibido, comentario: comentarioInput.value.trim() || null,
+        descuentoCodigo: descuentoAplicado?.codigo ?? null,
         items: [...carrito.values()].map(({ producto, cantidad }) => ({ productoId: producto.id, cantidad })),
       });
       ui.close();
@@ -387,6 +452,9 @@ export async function posPage() {
       formaPago = 'CONTADO';
       pagoSelect.value = 'CONTADO';
       moneda = 'UYU'; monedaSelect.value = 'UYU'; monedaSelect.disabled = false; cotizacion = 1;
+      descuentoAplicado = null;
+      codigoInput.value = ''; codigoInput.disabled = false;
+      aplicarDescBtn.classList.remove('d-none'); quitarDescBtn.classList.add('d-none');
       pagaConInput.value = ''; comentarioInput.value = '';
       actualizarVistaPago();
       renderCarrito();
@@ -454,14 +522,16 @@ function pickClienteBuscable(clientes) {
 }
 
 /** Popup simple de cantidad a vender (muestra precio y stock disponible). */
-function askCantidadVenta(producto, cantidadActual) {
+function askCantidadVenta(producto, cantidadActual, precioMostrar) {
+  const precio = precioMostrar != null ? precioMostrar : Number(producto.precio);
+  const enPromo = precioMostrar != null && precioMostrar !== Number(producto.precio);
   return new Promise((resolve) => {
     Swal.fire({
       title: esc(producto.nombre),
       html: `
         <div class="text-start small mb-2">
           <div><b>Código:</b> ${esc(producto.codigoProducto)}</div>
-          <div><b>Precio:</b> ${esc(fmt.money(producto.precio))}</div>
+          <div><b>Precio:</b> ${esc(fmt.money(precio))}${enPromo ? ' <span class="badge bg-success">Promo</span>' : ''}</div>
           <div><b>Stock disponible:</b> ${esc(producto.cantidadStock)}</div>
         </div>
         <input id="sk-venta-qty" type="number" min="1" class="form-control form-control-lg text-center"
@@ -567,6 +637,12 @@ function generarComprobantePDF(venta) {
     headStyles: { fillColor: [37, 99, 235] },
   });
   let y = (doc.lastAutoTable?.finalY || 60) + 10;
+  if (Number(venta.descuento) > 0) {
+    doc.setFontSize(10);
+    doc.text(`Subtotal: ${fmt.money(venta.subtotal)}`, 14, y); y += 6;
+    const etiqueta = venta.descuentoCodigo ? ` (${venta.descuentoCodigo})` : '';
+    doc.text(`Descuento${etiqueta}: -${fmt.money(venta.descuento)}`, 14, y); y += 8;
+  }
   doc.setFontSize(12);
   doc.text(`TOTAL: ${fmt.money(venta.total)}`, 14, y);
   doc.setFontSize(10);

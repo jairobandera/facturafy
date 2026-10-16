@@ -285,6 +285,10 @@ cuenta corriente: `GET /:id/cuenta`, `POST /:id/pagos`, `POST /:id/mora`, `PUT /
 `DELETE /:id`) y `/respaldo` (respaldo/restauración de **toda** la base: `GET /` devuelve un JSON con
 todas las tablas; `POST /restaurar` reemplaza los datos actuales dentro de una transacción — ver
 Respaldo abajo).
+`/promociones` (solo paquete completo: `GET /sucursal/:id` lista, `GET /vigentes/sucursal/:id` para el
+POS, `GET /:id`, `POST /`, `PUT /:id`, `DELETE /:id` = baja) y `/descuentos` (códigos de un solo uso:
+`GET /sucursal/:id`, `GET /validar/sucursal/:id?codigo=`, `POST /`, `DELETE /:id` = baja) — ver Promos
+y descuentos abajo.
 `/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
 active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
 devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).
@@ -416,6 +420,29 @@ SUPERADMINISTRADOR (guard server-side `assertRol` por `ctx.user.rol`, además de
 el front está en **Respaldo** (`#/admin/respaldo`, ítem de NAV **siempre visible** para el admin, sin
 `requiere`, así lo tienen todos los paquetes) y en `#/superadmin/configuraciones`; el restore pide
 escribir "RESTAURAR". `MAX_BODY` (`core/http.js`) se subió a 64MB para el upload del restore.
+
+**Promos y descuentos (`src/modules/promocion/`, `src/modules/descuentoCodigo/`).** Solo para el
+paquete **completo** (facturación Y control de stock): guard `assertUsaPromos` (back) / `usaPromos()`
+(front, = `usaStock() && usaFacturacion()`). Los demás paquetes no ven la sección en el NAV (no se
+muestra ni deshabilitada). En el NAV admin hay una sección colapsable **"Promos y descuentos"** con
+Promociones y Códigos de descuento (`#/admin/promociones`, `#/admin/descuentos`), ambas con
+`requiere: usaPromos`.
+- **Promociones** (`promocion` + `promocion_producto`): precio especial para una **lista de productos**,
+  por sucursal, con vigencia (`fecha_desde`/`fecha_hasta`; `hasta` NULL = sin fin / baja manual). La
+  baja por fecha es **al vuelo** (no hay proceso): `preciosVigentes(sucursalId)` usa `CURDATE()` y, si
+  un producto cae en varias promos, toma el **menor** precio. Mientras está vigente, cada producto de
+  la lista se vende a `precio`. El precio lo aplica **el servidor** en `venta.service` (override del
+  `precioUnitario` con `promoMap`), y el POS lo muestra cargando `/promociones/vigentes/sucursal/:id`.
+  Soft-delete por `activo` (baja manual). El front de alta/edición (`pages/admin/promociones.js`) tiene
+  un selector de productos buscable (modal propio, no `formModal`).
+- **Códigos de descuento** (`descuento_codigo`): **un solo uso**, por sucursal, `tipo` PORCENTAJE|MONTO
+  sobre el **total**, con vencimiento opcional (`fecha_hasta`) y baja manual (`activo`). El cajero los
+  ingresa en el POS (input que valida contra `/descuentos/validar/...`); el **consumo real** (marcar
+  `usado`, ligar `usado_venta_id`) ocurre dentro de la transacción de la venta (`consumirDescuento` +
+  `marcarUsado`, con `FOR UPDATE`). Anular la venta **libera** el código (`liberarDescuentoDeVenta`,
+  vuelve a estar disponible). El admin ve el estado (Vigente/Usado/Vencido/Programado) en
+  `pages/admin/descuentos.js`. La `venta` guarda `descuento` (monto) + snapshot
+  `descuento_codigo`/`descuento_tipo`/`descuento_valor` y `descuento_codigo_id`. Migración 017.
 
 **Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
 every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op

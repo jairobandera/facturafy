@@ -5,6 +5,8 @@ import { emitirCFE } from '../facturacion/cfe.js';
 import { ventaRepository } from './venta.repository.js';
 import { saldoConConn, cargarVenta, revertirVenta } from '../cliente/cuenta.js';
 import { cotizacionService } from '../cotizacion/cotizacion.module.js';
+import { promocionService } from '../promocion/promocion.module.js';
+import { consumirDescuento, marcarUsado, liberarDescuentoDeVenta } from '../descuentoCodigo/descuentoCodigo.module.js';
 
 function money(n) {
   return Number(n || 0).toLocaleString('es-UY', { style: 'currency', currency: 'UYU', minimumFractionDigits: 2 });
@@ -87,6 +89,12 @@ export const ventaService = {
     const efectivoRecibido = (dto.efectivoRecibido != null && dto.efectivoRecibido !== '')
       ? round2(dto.efectivoRecibido) : null;
 
+    // Precio especial vigente por producto (promos). El servidor es la autoridad del
+    // precio: si un producto esta en una promo vigente, se cobra el precio de la promo.
+    const promoMap = new Map(
+      (await promocionService.preciosVigentes(sucursalId)).map((r) => [Number(r.productoId), Number(r.precio)])
+    );
+
     const id = await transaction(async (conn) => {
       const { clienteId, consumidorFinal, limiteCredito } = await resolverCliente(conn, dto, sucursalId);
       // Una venta a credito exige un cliente registrado (a quien cobrarle despues).
@@ -117,7 +125,7 @@ export const ventaService = {
         );
         if (!rows.length) throw badRequest(`Producto ${productoId} no pertenece a esta sucursal o no esta activo`);
         const p = rows[0];
-        const precioUnitario = Number(p.precio);
+        const precioUnitario = promoMap.has(productoId) ? promoMap.get(productoId) : Number(p.precio);
         const subtotalRenglon = round2(precioUnitario * cantidad);
         subtotal += subtotalRenglon;
         renglones.push({
@@ -126,8 +134,15 @@ export const ventaService = {
         });
       }
 
-      const descuento = round2(dto.descuento || 0);
+      // Descuento por codigo (un solo uso). Se valida y bloquea aca; se marca usado
+      // recien cuando la venta tiene id.
       subtotal = round2(subtotal);
+      let descuento = 0;
+      let descInfo = null;
+      if (dto.descuentoCodigo) {
+        descInfo = await consumirDescuento(conn, sucursalId, dto.descuentoCodigo, subtotal);
+        descuento = descInfo.monto;
+      }
       const total = round2(subtotal - descuento);
       if (total < 0) throw badRequest('El descuento no puede ser mayor al subtotal');
 
@@ -158,15 +173,16 @@ export const ventaService = {
       const [res] = await conn.execute(
         `INSERT INTO venta
            (fecha_hora, sucursal_id, turno_id, usuario_id, cliente_id, consumidor_final,
-            subtotal, descuento, total, forma_pago,
+            subtotal, descuento, descuento_codigo_id, descuento_codigo, descuento_tipo, descuento_valor, total, forma_pago,
             moneda_pago, cotizacion, total_moneda, efectivo_recibido, vuelto, comentario,
             estado, activo, cfe_estado)
-         VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, 'EMITIDA', 1, 'INTERNO')`,
         [nowDateTime(), sucursalId, turnoId, dto.usuarioId ?? null, clienteId, consumidorFinal ? 1 : 0,
-         subtotal, descuento, total, formaPago,
+         subtotal, descuento, descInfo?.id ?? null, descInfo?.codigo ?? null, descInfo?.tipo ?? null, descInfo?.valor ?? null, total, formaPago,
          monedaPago, cotizacion, totalMoneda, efectivoRecibido, vuelto, comentario]
       );
       const ventaId = res.insertId;
+      if (descInfo) await marcarUsado(conn, descInfo.id, ventaId, nowDateTime());
 
       for (const r of renglones) {
         await conn.execute(
@@ -253,6 +269,8 @@ export const ventaService = {
       );
       // Si era una venta a credito, saca su cargo de la cuenta corriente del cliente.
       await revertirVenta(conn, id);
+      // Libera el codigo de descuento usado: al anular la venta, vuelve a estar disponible.
+      await liberarDescuentoDeVenta(conn, id);
     });
     return ventaRepository.findById(id);
   },

@@ -208,12 +208,14 @@ Crea la base `facturafy`, todas las tablas (`backend/sql/schema.sql`) y carga da
 > - `014-import-perfiles.sql` — perfiles de mapeo de columnas para importar Excels.
 > - `015-contacto-direccion.sql` — dirección en los contactos de correo.
 > - `016-contacto-cuenta.sql` — N° de cuenta en los contactos de correo (cruce del estado de cuenta).
+> - `017-promos-y-descuentos.sql` — promociones (precio especial) y códigos de descuento (paquete completo).
 >
 > ```bash
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/013-stock-decimal.sql
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/014-import-perfiles.sql
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/015-contacto-direccion.sql
 > mysql -u <usuario> -p facturafy < backend/sql/migrations/016-contacto-cuenta.sql
+> mysql -u <usuario> -p facturafy < backend/sql/migrations/017-promos-y-descuentos.sql
 > ```
 
 ### Opción B — importar un dump SQL desde un IDE / cliente

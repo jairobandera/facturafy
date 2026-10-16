@@ -129,3 +129,11 @@ export function usaEnvioCorreos() {
   const s = sucursalActual();
   return s ? s.usaEnvioCorreos === true : false;
 }
+
+/**
+ * Promos y descuentos: solo el paquete completo (facturación Y control de stock).
+ * Si falta cualquiera de los dos, la función no se ofrece.
+ */
+export function usaPromos() {
+  return usaStock() && usaFacturacion();
+}
