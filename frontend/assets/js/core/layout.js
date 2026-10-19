@@ -2,6 +2,7 @@
 import { h, clear } from './dom.js';
 import { auth } from './auth.js';
 import { usaLotes, usaStock, usaFacturacion, usaEnvioCorreos, usaPromos } from './sucursal.js';
+import { suscripcionRestanteTexto } from './suscripcion.js';
 
 // El inventario (productos/categorias/proveedores) solo tiene sentido con stock o
 // facturacion; en el paquete "solo envio de correos" se oculta por completo.
@@ -24,6 +25,7 @@ const NAV = {
     { icon: 'bi-person-plus', label: 'Crear usuario', href: '#/superadmin/crear-usuario' },
     { section: 'Configuracion' },
     { icon: 'bi-sliders', label: 'Configuraciones', href: '#/superadmin/configuraciones' },
+    { icon: 'bi-key', label: 'Suscripciones', href: '#/superadmin/suscripciones' },
   ],
   ADMINISTRADOR: [
     { icon: 'bi-speedometer2', label: 'Dashboard', href: '#/admin/dashboard', standalone: true },
@@ -60,6 +62,7 @@ const NAV = {
     // paquete; Respaldo esta siempre (cualquier paquete).
     { section: 'Configuracion' },
     { icon: 'bi-sliders', label: 'Facturacion', href: '#/admin/configuracion', requiere: usaFacturacion, oculto: true },
+    { icon: 'bi-key', label: 'Suscripción', href: '#/admin/suscripcion' },
     { icon: 'bi-database', label: 'Respaldo', href: '#/admin/respaldo' },
   ],
   EMPLEADO: [
@@ -123,6 +126,17 @@ export function resetShell() {
   const existing = document.getElementById('sk-shell');
   if (existing) existing.remove();
   contentEl = null;
+}
+
+// Linea de tiempo restante de suscripcion (solo administrador). Resalta si queda poco.
+function avisoSuscripcion(role) {
+  if (role !== 'ADMINISTRADOR') return null;
+  const texto = suscripcionRestanteTexto();
+  if (!texto) return null;
+  const urgente = /vencida|en \d+ h/i.test(texto);
+  return h('div', {
+    class: `small text-center mb-2 px-2 py-1 rounded ${urgente ? 'bg-danger text-white' : 'text-white-50'}`,
+  }, [h('i', { class: 'bi bi-clock-history me-1' }), texto]);
 }
 
 function buildSidebar(role) {
@@ -208,6 +222,7 @@ function buildSidebar(role) {
     h('div', { class: 'sk-sidebar-brand' }, [h('i', { class: 'bi bi-receipt-cutoff' }), 'Stockify']),
     navEl,
     h('div', { style: { padding: '1rem' } }, [
+      avisoSuscripcion(role),
       h('button', { class: 'btn btn-outline-light btn-sm w-100', onClick: () => auth.logout() },
         [h('i', { class: 'bi bi-box-arrow-right me-1' }), 'Cerrar sesion']),
     ]),

@@ -3,6 +3,8 @@ import { router } from './core/router.js';
 import { auth } from './core/auth.js';
 import { runCleanups } from './core/lifecycle.js';
 import { cargarSucursal, usaLotes, usaStock, usaFacturacion, usaEnvioCorreos, usaPromos } from './core/sucursal.js';
+import { cargarSuscripcion, suscripcionBloqueada, avisarVencimientoSiCorresponde } from './core/suscripcion.js';
+import { bloqueoPage } from './pages/shared/bloqueo.js';
 import { ui } from './core/ui.js';
 
 import { loginPage } from './pages/login.js';
@@ -12,6 +14,7 @@ import { verEmpresas, crearEmpresa, editarEmpresa } from './pages/superadmin/emp
 import { verSucursales, agregarSucursal, editarSucursal } from './pages/superadmin/sucursales.js';
 import { verUsuarios, crearUsuario, editarUsuario } from './pages/superadmin/usuarios.js';
 import { configuraciones } from './pages/superadmin/configuraciones.js';
+import { suscripcionesPage } from './pages/superadmin/suscripciones.js';
 // Admin
 import { adminDashboard } from './pages/admin/dashboard.js';
 import { gestionarCategorias } from './pages/admin/categorias.js';
@@ -35,6 +38,7 @@ import { correosContactosPage } from './pages/admin/correosContactos.js';
 import { correosEnviarPage } from './pages/admin/correosEnviar.js';
 import { correosHistorialPage } from './pages/admin/correosHistorial.js';
 import { respaldoPage } from './pages/admin/respaldo.js';
+import { suscripcionAdminPage } from './pages/admin/suscripcion.js';
 import { promocionesPage } from './pages/admin/promociones.js';
 import { descuentosPage } from './pages/admin/descuentos.js';
 // Empleado
@@ -53,6 +57,9 @@ const SA = 'SUPERADMINISTRADOR', AD = 'ADMINISTRADOR', EM = 'EMPLEADO', CJ = 'CA
 function page(handler) {
   return (ctx) => {
     runCleanups();
+    // Empresa con suscripcion vencida: cualquier ruta muestra la pantalla de bloqueo
+    // (el admin ingresa ahi la clave). El superadmin nunca se bloquea.
+    if (suscripcionBloqueada()) { bloqueoPage(); return; }
     Promise.resolve()
       .then(() => handler(ctx))
       .catch((err) => {
@@ -76,6 +83,7 @@ router.add('/superadmin/ver-usuarios', page(verUsuarios), { role: SA });
 router.add('/superadmin/crear-usuario', page(crearUsuario), { role: SA });
 router.add('/superadmin/editar-usuario/:id', page(editarUsuario), { role: SA });
 router.add('/superadmin/configuraciones', page(configuraciones), { role: SA });
+router.add('/superadmin/suscripciones', page(suscripcionesPage), { role: SA });
 
 // ---- Admin ----
 router.add('/admin/dashboard', page(adminDashboard), { role: AD });
@@ -109,6 +117,8 @@ router.add('/admin/promociones', page(promocionesPage), { role: AD, requiere: us
 router.add('/admin/descuentos', page(descuentosPage), { role: AD, requiere: usaPromos });
 // Respaldo: disponible en cualquier paquete (sin `requiere`).
 router.add('/admin/respaldo', page(respaldoPage), { role: AD });
+// Suscripción: disponible en cualquier paquete (sin `requiere`).
+router.add('/admin/suscripcion', page(suscripcionAdminPage), { role: AD });
 
 // ---- Empleado ----
 router.add('/empleado/dashboard', page(empleadoDashboard), { role: EM });
@@ -131,7 +141,20 @@ router.setNotFound(() => {
   else router.navigate('/login');
 });
 
-// La config de la sucursal define que apartados opcionales estan habilitados
-// (hoy, Lotes), asi que se carga antes de resolver la primera ruta.
-if (auth.isAuthenticated() && !auth.isExpired()) cargarSucursal().finally(() => router.start());
-else router.start();
+// Si el backend corta por suscripcion vencida (402), re-cargamos el estado y mostramos
+// la pantalla de bloqueo (backstop del gate del front).
+document.addEventListener('suscripcion-bloqueada', async () => {
+  await cargarSuscripcion();
+  if (suscripcionBloqueada()) bloqueoPage();
+});
+
+// La config de la sucursal (apartados opcionales) y la suscripcion se cargan antes de
+// resolver la primera ruta.
+if (auth.isAuthenticated() && !auth.isExpired()) {
+  Promise.all([cargarSucursal(), cargarSuscripcion()]).finally(() => {
+    router.start();
+    avisarVencimientoSiCorresponde();
+  });
+} else {
+  router.start();
+}

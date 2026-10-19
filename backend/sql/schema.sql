@@ -4,6 +4,7 @@
 -- ============================================================
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS codigo_activacion;
 DROP TABLE IF EXISTS import_perfil;
 DROP TABLE IF EXISTS descuento_codigo;
 DROP TABLE IF EXISTS promocion_producto;
@@ -44,7 +45,27 @@ CREATE TABLE empresa (
   rut       VARCHAR(255),
   direccion VARCHAR(255),
   telefono  VARCHAR(255),
+  -- Suscripcion: prueba de 7 dias desde fecha_alta; luego hay que activar con una clave.
+  fecha_alta            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- inicio de la prueba
+  suscripcion_hasta     DATE,                                        -- pagada hasta (NULL = solo prueba)
+  suscripcion_ilimitada BOOLEAN NOT NULL DEFAULT FALSE,              -- no vence nunca (lo fija el superadmin)
   activo    BOOLEAN NOT NULL DEFAULT TRUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------- CODIGO_ACTIVACION (claves de suscripcion por empresa) ----------------
+-- El superadmin genera una clave para una empresa con una duracion (dias). El admin de
+-- esa empresa la ingresa y extiende `empresa.suscripcion_hasta`. Clave de un solo uso.
+CREATE TABLE codigo_activacion (
+  id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+  codigo           VARCHAR(40) NOT NULL,
+  empresa_id       BIGINT NOT NULL,
+  dias             INT NOT NULL,
+  usado            BOOLEAN NOT NULL DEFAULT FALSE,
+  usado_fecha      DATETIME,
+  fecha_generacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  activo           BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT uk_codigo_activacion UNIQUE (codigo),
+  CONSTRAINT fk_codact_empresa FOREIGN KEY (empresa_id) REFERENCES empresa(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------- COTIZACION (cambio de moneda por empresa) ----------------

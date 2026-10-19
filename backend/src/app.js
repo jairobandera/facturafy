@@ -7,6 +7,7 @@ import { HttpError } from './core/httpError.js';
 import { extractBearer, verifyToken } from './core/jwt.js';
 import { serveStatic } from './core/static.js';
 import { buildApiRouter } from './routes.js';
+import { assertAccesoSuscripcion } from './modules/suscripcion/suscripcion.module.js';
 
 const apiRouter = buildApiRouter();
 const frontendDir = path.resolve(config.rootDir, '..', 'frontend');
@@ -44,6 +45,9 @@ export async function handleRequest(req, res) {
       }
 
       const ctx = { params: matched.params, query, body, user, req };
+      // Gate de suscripcion: bloquea las operaciones de una empresa vencida (402),
+      // salvo login y los endpoints de suscripcion. El superadmin nunca se bloquea.
+      await assertAccesoSuscripcion(ctx, apiPath);
       await matched.handler(ctx, res);
     } catch (err) {
       handleError(err, res);

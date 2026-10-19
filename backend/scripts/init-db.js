@@ -48,7 +48,9 @@ async function main() {
 async function seed(conn) {
   // Empresa
   const [empRes] = await conn.query(
-    `INSERT INTO empresa (nombre, rut, direccion, telefono) VALUES (?,?,?,?)`,
+    // La empresa demo queda con suscripcion ilimitada para que un entorno de dev no se
+    // bloquee a los 7 dias de prueba.
+    `INSERT INTO empresa (nombre, rut, direccion, telefono, suscripcion_ilimitada) VALUES (?,?,?,?,1)`,
     ['Distribuidora Demo S.A.', '210000000012', 'Av. Siempre Viva 742', '099111222']
   );
   const empresaId = empRes.insertId;

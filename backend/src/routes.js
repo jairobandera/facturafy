@@ -25,6 +25,7 @@ import { estadisticaVentaRoutes } from './modules/estadisticaVenta/estadisticaVe
 import { respaldoRoutes } from './modules/respaldo/respaldo.module.js';
 import { promocionRoutes } from './modules/promocion/promocion.module.js';
 import { descuentoCodigoRoutes } from './modules/descuentoCodigo/descuentoCodigo.module.js';
+import { suscripcionRoutes } from './modules/suscripcion/suscripcion.module.js';
 
 export function buildApiRouter() {
   const api = new Router();
@@ -53,5 +54,6 @@ export function buildApiRouter() {
   api.use('/respaldo', respaldoRoutes);
   api.use('/promociones', promocionRoutes);
   api.use('/descuentos', descuentoCodigoRoutes);
+  api.use('/suscripcion', suscripcionRoutes);
   return api;
 }

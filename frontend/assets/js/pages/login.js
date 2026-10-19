@@ -4,6 +4,7 @@ import { router } from '../core/router.js';
 import { ui } from '../core/ui.js';
 import { resetShell } from '../core/layout.js';
 import { cargarSucursal, limpiarSucursal } from '../core/sucursal.js';
+import { cargarSuscripcion, limpiarSuscripcion, avisarVencimientoSiCorresponde } from '../core/suscripcion.js';
 
 export function loginPage() {
   resetShell();
@@ -17,6 +18,7 @@ export function loginPage() {
   }
   // Se llega aca tambien al cerrar sesion: la config de la sucursal es de ese usuario.
   limpiarSucursal();
+  limpiarSuscripcion();
 
   const userInput = h('input', { class: 'form-control', id: 'login-user', placeholder: 'Nombre de usuario', autofocus: true });
   const passInput = h('input', { class: 'form-control', id: 'login-pass', type: 'password', placeholder: 'Contraseña' });
@@ -37,9 +39,10 @@ export function loginPage() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Ingresando...';
     try {
       await auth.login(nombreUsuario, contrasenia);
-      await cargarSucursal();
+      await Promise.all([cargarSucursal(), cargarSuscripcion()]);
       resetShell();
       router.navigate(auth.homeRoute().replace('#', ''));
+      avisarVencimientoSiCorresponde();
     } catch (err) {
       ui.error(err.message || 'No se pudo iniciar sesión.');
       btn.disabled = false;

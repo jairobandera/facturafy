@@ -289,6 +289,10 @@ Respaldo abajo).
 POS, `GET /:id`, `POST /`, `PUT /:id`, `DELETE /:id` = baja) y `/descuentos` (códigos de un solo uso:
 `GET /sucursal/:id`, `GET /validar/sucursal/:id?codigo=`, `POST /`, `DELETE /:id` = baja) — ver Promos
 y descuentos abajo.
+`/suscripcion` (licencia por empresa — ver Suscripciones abajo): `GET /estado` (empresa del usuario,
+accesible aun bloqueado), `POST /activar` (`{codigo}`, el admin ingresa la clave); superadmin:
+`GET /empresa/:id/estado`, `PUT /empresa/:id` (`{ilimitada, dias}`), `GET /codigos/empresa/:id`,
+`POST /codigos` (`{empresaId, dias}`), `DELETE /codigos/:id`.
 `/sucursales` adds the PIN management (`GET|POST /:id/pines`, `PUT|DELETE /:id/pines/:pinId`, max 3
 active, value never returned), the SMTP per-sucursal (`GET|PUT /:id/smtp`, la contraseña solo se
 devuelve al editar) y lleva `limiteCreditoDefault` en el CRUD (`PUT /sucursales/:id`).
@@ -445,7 +449,38 @@ Promociones y Códigos de descuento (`#/admin/promociones`, `#/admin/descuentos`
   `pages/admin/descuentos.js`. La `venta` guarda `descuento` (monto) + snapshot
   `descuento_codigo`/`descuento_tipo`/`descuento_valor` y `descuento_codigo_id`. Migración 017.
 
+**Suscripciones / licencia por empresa (`src/modules/suscripcion/`).** Cada **empresa** tiene una
+**prueba de 7 días** desde `empresa.fecha_alta` (DATETIME, DEFAULT CURRENT_TIMESTAMP → al crear la
+empresa, y en la migración 018 las existentes arrancan su prueba desde el ALTER). Pasada la prueba,
+hay que **activar con una clave** que extiende `empresa.suscripcion_hasta`; al vencer **se bloquea de
+nuevo** (suscripción recurrente). `empresa.suscripcion_ilimitada` = no vence nunca (lo fija el
+superadmin; la empresa demo del seed queda ilimitada). El estado se calcula **al vuelo**
+(`calcularEstado`): activa si ilimitada, o `suscripcion_hasta >= hoy`, o dentro de la prueba
+(`fecha_alta + 7d`). Las **claves** (`codigo_activacion`) son **de un solo uso, por empresa, con
+duración en días**, las genera el **superadmin** en `#/superadmin/suscripciones` y se las pasa al admin.
+Activar extiende desde `suscripcion_hasta` si sigue vigente, o desde hoy si venció.
+Enforcement en **ambos lados**: backend `assertAccesoSuscripcion` (gate en `app.js`, **antes** de cada
+handler) devuelve **402** para toda operación de una empresa vencida salvo `/seguridad/*` y
+`/suscripcion/*`; el superadmin nunca se bloquea (con cache de 30 s por empresa). Frontend
+`core/suscripcion.js` carga `/suscripcion/estado` al arrancar y en el login; `page()` (app.js) muestra
+`pages/shared/bloqueo.js` (el admin ingresa ahí la clave; otros roles ven "contactá al admin") cuando
+`suscripcionBloqueada()`; un 402 dispara el evento `suscripcion-bloqueada` como backstop. **Avisos al
+admin**: popup al loguearse cuando quedan **≤24 h** (una vez por sesión, `avisarVencimientoSiCorresponde`)
+y una línea con el tiempo restante **siempre visible** en el sidebar (`avisoSuscripcion`, resalta en
+rojo si queda poco). Migración 018.
+
 **Factura electrónica (DGI/CFE Uruguay) — preparada, hoy apagada.** `venta` has `cfe_*` columns and
 every venta is born `cfe_estado = 'INTERNO'`. `src/modules/facturacion/cfe.js#emitirCFE()` is a no-op
 until `CFE_ENABLED=true` and a provider are configured in `.env` (`CFE_*`). Activating it should be a
 minimal change: set credentials + implement the provider branch in `cfe.js`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

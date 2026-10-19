@@ -25,6 +25,11 @@ async function request(method, path, body, { raw = false } = {}) {
     if (auth.isAuthenticated() && auth.isExpired()) auth.logout();
   }
 
+  // 402: la empresa tiene la suscripcion vencida. Avisa para mostrar el bloqueo.
+  if (res.status === 402) {
+    try { document.dispatchEvent(new CustomEvent('suscripcion-bloqueada')); } catch { /* ignore */ }
+  }
+
   if (res.status === 204) return null;
 
   const text = await res.text();
